@@ -6,7 +6,7 @@
 import * as cheerio from "cheerio";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 
-const UA = "sgpools-results/0.1 (personal archive; contact: ineomod@gmail.com)";
+const UA = "can-i-retire/0.1 (personal archive; contact: dom.neo.ws@gmail.com)";
 
 const drawUrl = (drawNo: number) =>
   "https://www.singaporepools.com.sg/en/product/sr/Pages/toto_results.aspx?sppl=" +

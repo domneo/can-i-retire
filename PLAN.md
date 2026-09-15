@@ -13,19 +13,19 @@
 
 ## 1. Scope
 
-| Question | Answer | Consequence |
-|---|---|---|
-| Historical depth | One year back | ~260 requests, ~9 minute backfill |
-| Consumers | Internal / single user | One bearer token, no rate limiting, no quotas |
-| Data captured | Numbers **+** prize amounts and winner counts | TOTO only — see caveat |
-| Fetching | Plain `fetch`, no browser | No Playwright, no browser binaries |
-| Extraction | cheerio selectors | No model, no GPU, no inference dependency |
-| Storage | SQLite, single file | No DB server, no connection pool, trivial backup |
+| Question         | Answer                                        | Consequence                                      |
+| ---------------- | --------------------------------------------- | ------------------------------------------------ |
+| Historical depth | One year back                                 | ~260 requests, ~9 minute backfill                |
+| Consumers        | Internal / single user                        | One bearer token, no rate limiting, no quotas    |
+| Data captured    | Numbers **+** prize amounts and winner counts | TOTO only — see caveat                           |
+| Fetching         | Plain `fetch`, no browser                     | No Playwright, no browser binaries               |
+| Extraction       | cheerio selectors                             | No model, no GPU, no inference dependency        |
+| Storage          | SQLite, single file                           | No DB server, no connection pool, trivial backup |
 
 **Out of scope:** prediction, betting integration, Singapore Sweep and sports, headless browsers,
 LLM extraction.
 
-**4D prize caveat.** 4D prize amounts are a *fixed published schedule* ($2,000 per $1 Big bet for
+**4D prize caveat.** 4D prize amounts are a _fixed published schedule_ ($2,000 per $1 Big bet for
 1st Prize, $3,000 Small, and so on) — not per-draw values — and Singapore Pools does not publish 4D
 winner counts. "Prizes + winner counts" therefore applies to TOTO only. For 4D the complete per-draw
 dataset is the 23 numbers. Keep the 4D prize schedule as a small static reference table.
@@ -38,17 +38,17 @@ low, but read them, keep request rates polite, and reconsider if this ever becom
 
 ## 2. Stack choices
 
-| Concern | Pick | Why |
-|---|---|---|
-| Runtime | **Node 26** | Active LTS from 28 Oct 2026, supported to Apr 2029. Boring, universal. |
-| TypeScript | `tsx` in dev, `tsc` for build | Dependable. See the type-stripping note below. |
-| API | **Hono** + `@hono/node-server` | Tiny, fast, fully typed. Portable off Node later if you ever want to be. |
-| HTML parsing | **cheerio** | jQuery-style API, mature, exactly right for static markup. |
-| Database | **SQLite** via `better-sqlite3` | Synchronous, no pool, no async ceremony. `db.transaction()` matters here. |
-| Schema/validation | **Zod 4** | One schema gives you the TS type, runtime validation, and the OpenAPI doc. |
-| Migrations | Numbered `.sql` files + ~30-line runner | Drizzle is fine later; for one dev and ten tables it's overhead. |
-| Tests | `node:test` + `node:assert` | Built in, no framework to install. |
-| HTTP client | Built-in `fetch` | Stable in Node since 21. Nothing else needed. |
+| Concern           | Pick                                    | Why                                                                        |
+| ----------------- | --------------------------------------- | -------------------------------------------------------------------------- |
+| Runtime           | **Node 26**                             | Active LTS from 28 Oct 2026, supported to Apr 2029. Boring, universal.     |
+| TypeScript        | `tsx` in dev, `tsc` for build           | Dependable. See the type-stripping note below.                             |
+| API               | **Hono** + `@hono/node-server`          | Tiny, fast, fully typed. Portable off Node later if you ever want to be.   |
+| HTML parsing      | **cheerio**                             | jQuery-style API, mature, exactly right for static markup.                 |
+| Database          | **SQLite** via `better-sqlite3`         | Synchronous, no pool, no async ceremony. `db.transaction()` matters here.  |
+| Schema/validation | **Zod 4**                               | One schema gives you the TS type, runtime validation, and the OpenAPI doc. |
+| Migrations        | Numbered `.sql` files + ~30-line runner | Drizzle is fine later; for one dev and ten tables it's overhead.           |
+| Tests             | `node:test` + `node:assert`             | Built in, no framework to install.                                         |
+| HTTP client       | Built-in `fetch`                        | Stable in Node since 21. Nothing else needed.                              |
 
 ### Node-specific decisions worth understanding
 
@@ -61,8 +61,8 @@ serve({ fetch: app.fetch, port: 3000 });
 ```
 
 **`better-sqlite3` over `node:sqlite`.** The built-in `node:sqlite` module landed in v22.5.0 behind a
-flag, lost the flag while remaining experimental, and is still marked *Stability 1.2 — release
-candidate* in the Node 26 docs. It's genuinely tempting: zero dependencies, no native addon, and the
+flag, lost the flag while remaining experimental, and is still marked _Stability 1.2 — release
+candidate_ in the Node 26 docs. It's genuinely tempting: zero dependencies, no native addon, and the
 same synchronous `DatabaseSync` shape. Two things keep it out of the default. It has no
 `db.transaction()` wrapper, and this project's core write path is exactly a transaction — one draw
 plus six numbers plus seven prize groups plus outlet rows, all atomic or none. And it's still RC.
@@ -141,8 +141,8 @@ Three of these pins carry a consequence rather than just a number:
   `hono >=4.10.0`. There is no maintained version of it that accepts Zod 3. Write the phase 2
   schemas in Zod 4 from the start rather than migrating at phase 6.
 - **`@hono/node-server` is on 2.x** (peer `hono ^4`, engines `>=20`). The `serve({ fetch: app.fetch,
-  port })` call shape is unchanged, so this is purely the pin.
-- **The test glob needs quoting.** npm runs scripts through `sh`, which does not expand `**`
+port })` call shape is unchanged, so this is purely the pin.
+- **The test glob needs quoting.** pnpm runs scripts through `sh`, which does not expand `**`
   recursively; unquoted, you silently test a subset. Quoted, Node's test runner does the globbing.
 
 **One thing to verify yourself:** `@types/better-sqlite3` is numbered 9.x while the runtime package
@@ -177,20 +177,21 @@ TOTO  https://www.singaporepools.com.sg/en/product/sr/Pages/toto_results.aspx?sp
 
 Verified samples:
 
-| URL param | Decodes to | Returns |
-|---|---|---|
+| URL param              | Decodes to        | Returns                                                                                                           |
+| ---------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `RHJhd051bWJlcj00MDk5` | `DrawNumber=4099` | TOTO, Mon 28 Jul 2025 — 2·14·16·21·36·47, additional 1, Group 1 $5,853,782 snowballed, full Group 1–7 share table |
-| `RHJhd051bWJlcj01MDE3` | `DrawNumber=5017` | 4D, Wed 24 May 2023 — 1st 8608, 2nd 4918, 3rd 9832, 10 Starter, 10 Consolation |
+| `RHJhd051bWJlcj01MDE3` | `DrawNumber=5017` | 4D, Wed 24 May 2023 — 1st 8608, 2nd 4918, 3rd 9832, 10 Starter, 10 Consolation                                    |
 
 ```ts
 const BASE = {
   toto: "https://www.singaporepools.com.sg/en/product/sr/Pages/toto_results.aspx",
-  "4d":  "https://www.singaporepools.com.sg/en/product/pages/4d_results.aspx",
+  "4d": "https://www.singaporepools.com.sg/en/product/pages/4d_results.aspx",
 } as const;
 
 export const drawUrl = (game: keyof typeof BASE, drawNo: number) =>
   `${BASE[game]}?sppl=${encodeURIComponent(
-    Buffer.from(`DrawNumber=${drawNo}`).toString("base64"))}`;
+    Buffer.from(`DrawNumber=${drawNo}`).toString("base64"),
+  )}`;
 ```
 
 **Gotcha:** the bare page with no `sppl` loads results client-side and returns an empty results block
@@ -199,10 +200,10 @@ number until you get a miss.
 
 **Backfill window** — estimates only, establish the real current draw number by probing:
 
-| Game | Draws/yr | Anchor | Est. current | Est. one year back | Requests |
-|---|---|---|---|---|---|
-| TOTO | ~104 (Mon, Thu) | 4099 = 28 Jul 2025 | ~4215 | ~4111 | ~104 |
-| 4D | ~156 (Wed, Sat, Sun) | 5017 = 24 May 2023 | ~5530 | ~5374 | ~156 |
+| Game | Draws/yr             | Anchor             | Est. current | Est. one year back | Requests |
+| ---- | -------------------- | ------------------ | ------------ | ------------------ | -------- |
+| TOTO | ~104 (Mon, Thu)      | 4099 = 28 Jul 2025 | ~4215        | ~4111              | ~104     |
+| 4D   | ~156 (Wed, Sat, Sun) | 5017 = 24 May 2023 | ~5530        | ~5374              | ~156     |
 
 ~260 requests. At one every 2 seconds: about nine minutes.
 
@@ -223,7 +224,7 @@ phases 0–3 already give you a queryable year of results.
 
 ### Phase 0 — One file, one draw ★☆☆☆☆
 
-*~50 lines, an afternoon.* No database, no server, no framework.
+_~50 lines, an afternoon._ No database, no server, no framework.
 
 ```ts
 // scratch/spike.ts  —  npx tsx scratch/spike.ts 4099
@@ -231,10 +232,11 @@ import * as cheerio from "cheerio";
 
 const drawNo = Number(process.argv[2]);
 const sppl = Buffer.from(`DrawNumber=${drawNo}`).toString("base64");
-const url = `https://www.singaporepools.com.sg/en/product/sr/Pages/toto_results.aspx?sppl=${
-  encodeURIComponent(sppl)}`;
+const url = `https://www.singaporepools.com.sg/en/product/sr/Pages/toto_results.aspx?sppl=${encodeURIComponent(
+  sppl,
+)}`;
 
-const html = await fetch(url).then(r => r.text());
+const html = await fetch(url).then((r) => r.text());
 console.log(JSON.stringify(extractToto(cheerio.load(html)), null, 2));
 ```
 
@@ -251,22 +253,23 @@ project. Everything after is plumbing.
 
 ### Phase 1 — MVP: fetch → SQLite → one endpoint ★★☆☆☆
 
-*A day.* The walking skeleton. TOTO only, latest draw only, one table, one route.
+_A day._ The walking skeleton. TOTO only, latest draw only, one table, one route.
 
 ```ts
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 
 const app = new Hono();
-app.get("/toto/latest", c =>
-  c.json(db.prepare("SELECT * FROM draws ORDER BY draw_no DESC LIMIT 1").get()));
+app.get("/toto/latest", (c) =>
+  c.json(db.prepare("SELECT * FROM draws ORDER BY draw_no DESC LIMIT 1").get()),
+);
 
 serve({ fetch: app.fetch, port: 3000 });
 ```
 
 - `data.db` with a single `draws` table — `draw_no`, `draw_date`, `numbers` (JSON text), `additional`.
-- `npm run scrape` fetches the latest draw and upserts it.
-- `npm run dev` starts Hono on :3000.
+- `pnpm run scrape` fetches the latest draw and upserts it.
+- `pnpm run dev` starts Hono on :3000.
 
 **Done when:** `curl localhost:3000/toto/latest` returns real data that you scraped yourself.
 
@@ -277,7 +280,7 @@ later and none of it changes this shape.
 
 ### Phase 2 — Both games, real schema ★★☆☆☆
 
-*A day or two.*
+_A day or two._
 
 - Proper normalised tables (section 6), created by numbered migration files.
 - Seed `fourd_prize_schedule` as static data in the same migration — it's a published table, it
@@ -298,9 +301,9 @@ later and none of it changes this shape.
 
 ### Phase 3 — Backfill a year ★★☆☆☆
 
-*Half a day, plus nine minutes of waiting.*
+_Half a day, plus nine minutes of waiting._
 
-- `npm run backfill -- --game toto --since 2025-09-15`.
+- `pnpm run backfill -- --game toto --since 2025-09-15`.
 - **Walk backwards from "latest" and stop on the date, not on a computed `--from` draw number.**
   The section 3 estimates assume a fixed draws-per-year; cascade draws break that assumption, and
   you'd rather not discover the drift by finding a hole in the data. Probe upward from the anchor to
@@ -308,7 +311,7 @@ later and none of it changes this shape.
 - Rate limit at 0.5 req/s. Save every raw HTML to `data/raw/<game>/<drawNo>.html`.
 - Probe a nonsense draw number to learn what a miss looks like.
 - Idempotent: `INSERT ... ON CONFLICT(game, draw_no) DO NOTHING`. Safe to re-run. Note that this is
-  the *backfill* write path only — reconciliation in phase 5 needs a different one, see section 9.
+  the _backfill_ write path only — reconciliation in phase 5 needs a different one, see section 9.
 
 **Done when:** ~260 draws in the database and ~260 HTML files on disk.
 
@@ -319,9 +322,9 @@ with no network in the way.
 
 ### Phase 4 — Validation and quarantine ★★★☆☆
 
-*A day.* This is where the project becomes trustworthy.
+_A day._ This is where the project becomes trustworthy.
 
-- Zod schemas with refinements enforcing the domain rules in section 7. Write those rules *after*
+- Zod schemas with refinements enforcing the domain rules in section 7. Write those rules _after_
   the phase 3 archive exists, from what the pages actually contain — see the caveat in section 7.
 - **A quarantined draw is a row in `draws` with a `raw_path` and nothing in the typed tables.** This
   is the only version that works: `toto_results.additional_number` is NOT NULL and the child tables
@@ -343,7 +346,7 @@ instead of silently wrong data.
 
 ### Phase 5 — Scheduler ★★★☆☆
 
-*Half a day.* First phase that has to run unattended.
+_Half a day._ First phase that has to run unattended.
 
 - Draw-day windows: from 18:45 SGT, probe `last + 1` every 10 minutes, stop on success or after 90
   minutes. Extra 21:45 window on TOTO days for cascade draws.
@@ -357,7 +360,7 @@ instead of silently wrong data.
 
 ### Phase 6 — API polish ★★★☆☆
 
-*A day.* Only worth doing once the response shapes have stopped moving.
+_A day._ Only worth doing once the response shapes have stopped moving.
 
 - `app.doc()` over the schemas you've been writing since phase 2 → `/openapi.json`, plus Scalar or
   Swagger UI at `/docs`. Cheap precisely because the `OpenAPIHono` migration already happened.
@@ -370,10 +373,10 @@ instead of silently wrong data.
 
 ### Phase 7 — Deploy ★★☆☆☆
 
-*Half a day.*
+_Half a day._
 
-- Multi-stage Dockerfile: `node:26` builder running `npm ci` and `tsc`, then `node:26-slim` runtime
-  with `npm ci --omit=dev`.
+- Multi-stage Dockerfile: `node:26` builder running `pnpm ci` and `tsc`, then `node:26-slim` runtime
+  with `pnpm ci --omit=dev`.
 - **Alpine is fine now.** `better-sqlite3` v13 ships musl prebuilds in the tarball, so there's no
   node-gyp step and no `python3 make g++` in the builder. `-slim` is still the default recommendation
   on general principle, but the native addon is no longer the reason.
@@ -387,16 +390,16 @@ instead of silently wrong data.
 
 ### Complexity summary
 
-| Phase | Effort | Risk | Runnable output |
-|---|---|---|---|
-| 0 Spike | ★☆☆☆☆ | Only real unknown | Printed JSON |
-| 1 MVP | ★★☆☆☆ | None | Working endpoint |
-| 2 Both games | ★★☆☆☆ | None | Full current data |
-| 3 Backfill | ★★☆☆☆ | Rate limiting | A year of history |
-| 4 Validation | ★★★☆☆ | Fiddly edge cases | Trustworthy data |
-| 5 Scheduler | ★★★☆☆ | Timezones | Unattended |
-| 6 API polish | ★★★☆☆ | None | Documented API |
-| 7 Deploy | ★★☆☆☆ | Backups | Running somewhere |
+| Phase        | Effort | Risk              | Runnable output   |
+| ------------ | ------ | ----------------- | ----------------- |
+| 0 Spike      | ★☆☆☆☆  | Only real unknown | Printed JSON      |
+| 1 MVP        | ★★☆☆☆  | None              | Working endpoint  |
+| 2 Both games | ★★☆☆☆  | None              | Full current data |
+| 3 Backfill   | ★★☆☆☆  | Rate limiting     | A year of history |
+| 4 Validation | ★★★☆☆  | Fiddly edge cases | Trustworthy data  |
+| 5 Scheduler  | ★★★☆☆  | Timezones         | Unattended        |
+| 6 API polish | ★★★☆☆  | None              | Documented API    |
+| 7 Deploy     | ★★☆☆☆  | Backups           | Running somewhere |
 
 ---
 
@@ -592,15 +595,15 @@ every quarantined row by hand is completely feasible.
 
 ```ts
 export async function fetchDraw(game: Game, drawNo: number): Promise<string> {
-  await limiter.acquire();                      // 0.5 req/s with jitter
+  await limiter.acquire(); // 0.5 req/s with jitter
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(drawUrl(game, drawNo), {
-      headers: { "User-Agent": "sgpools-results/1.0 (you@example.com)" },
+      headers: { "User-Agent": "can-i-retire/1.0 (you@example.com)" },
       signal: AbortSignal.timeout(30_000),
     });
     if (res.ok) return res.text();
-    if (res.status < 500) throw new Error(`HTTP ${res.status}`);  // never retry 4xx
-    await setTimeout([2_000, 8_000, 30_000][attempt]);            // node:timers/promises
+    if (res.status < 500) throw new Error(`HTTP ${res.status}`); // never retry 4xx
+    await setTimeout([2_000, 8_000, 30_000][attempt]); // node:timers/promises
   }
   throw new Error("exhausted retries");
 }
@@ -608,7 +611,7 @@ export async function fetchDraw(game: Game, drawNo: number): Promise<string> {
 
 - Write the HTML to `data/raw/` **before** parsing. Every parse bug becomes replayable, and widening
   the backfill window later is additive.
-- Detect "no such draw" by response *shape*, not status code — the site may well return 200 with an
+- Detect "no such draw" by response _shape_, not status code — the site may well return 200 with an
   empty results block. Both the upward probe for "latest" and the backfill loop terminate on this
   signal, so pin the behaviour down in phase 3 against a deliberately absurd draw number.
 
@@ -616,10 +619,10 @@ export async function fetchDraw(game: Game, drawNo: number): Promise<string> {
 
 ## 9. Scheduling
 
-| Game | Days | Draw time (SGT) |
-|------|------|-----------------|
-| TOTO | Mon, Thu | 18:30 (cascade draws 21:30) |
-| 4D | Wed, Sat, Sun | 18:30 |
+| Game | Days          | Draw time (SGT)             |
+| ---- | ------------- | --------------------------- |
+| TOTO | Mon, Thu      | 18:30 (cascade draws 21:30) |
+| 4D   | Wed, Sat, Sun | 18:30                       |
 
 Draw-day capture from 18:45 SGT: probe `last_known + 1` every 10 minutes, stop on first successful
 write or after 90 minutes. Extra 21:45 window on TOTO days.

@@ -10,7 +10,7 @@ if (!CONTACT) {
     "SGPOOLS_CONTACT is unset — set it to a real contact address (see .env.example)",
   );
 }
-const UA = `sgpools-results/1.0 (${CONTACT})`;
+const UA = `can-i-retire/1.0 (${CONTACT})`;
 
 const BACKOFF_MS = [2_000, 8_000, 30_000];
 
