@@ -4,11 +4,23 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "scrape": "tsx --env-file-if-exists=.env src/jobs/scrape.ts",
     "spike": "tsx scratch/spike.ts"
   },
   "devDependencies": {
-    "cheerio": "^1.2.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.5.0",
     "tsx": "^4.23.13",
-    "@types/node": "^24.5.0"
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "better-sqlite3": "^13.0.3",
+    "cheerio": "^1.2.0",
+    "hono": "^4.13.7"
   }
 }
