@@ -3,11 +3,15 @@
 **Stack:** Node.js · TypeScript · Hono · SQLite · cheerio
 **Approach:** Walking skeleton first. Each phase is runnable and useful on its own.
 
-> **Revision 7.** Dependency versions resolved against the registry (14 Sep 2026). Zod moved to v4,
-> `better-sqlite3` to v13, TypeScript to v7, Node target to 26. Quarantine, reconciliation and
-> OpenAPI semantics tightened where revision 6 contradicted itself. Phases unchanged in shape —
-> phase 0 is one file you can run in an afternoon, and nothing before phase 5 requires a decision you
-> can't reverse.
+> **Revision 8.** Phases 0–2 are built, and building them settled most of section 11. The large
+> correction: the site publishes a static **draw-list index** for each game — roughly three years of
+> draw numbers and dates, in one file. Nothing in this project needs to probe for draw numbers, and
+> phase 3 shrinks accordingly. Two rules in section 7 were wrong: the sequence-tolerance rule is now
+> an exact check against the list, and the weekday rule is gone rather than patched, since draw days
+> are the operator's to change. Everything about the stack, the data model and phases 5–7 stands.
+>
+> _Revision 7 resolved dependency versions against the registry (14 Sep 2026): Zod 4,
+> `better-sqlite3` 13, TypeScript 7, Node 26._
 
 ---
 
@@ -15,7 +19,7 @@
 
 | Question         | Answer                                        | Consequence                                      |
 | ---------------- | --------------------------------------------- | ------------------------------------------------ |
-| Historical depth | One year back                                 | ~260 requests, ~9 minute backfill                |
+| Historical depth | One year back                                 | 260 requests, ~9 minute backfill                 |
 | Consumers        | Internal / single user                        | One bearer token, no rate limiting, no quotas    |
 | Data captured    | Numbers **+** prize amounts and winner counts | TOTO only — see caveat                           |
 | Fetching         | Plain `fetch`, no browser                     | No Playwright, no browser binaries               |
@@ -194,23 +198,59 @@ export const drawUrl = (game: keyof typeof BASE, drawNo: number) =>
   )}`;
 ```
 
-**Gotcha:** the bare page with no `sppl` loads results client-side and returns an empty results block
-to a plain HTTP client. Always pass `sppl`. To find "latest", probe upward from the last stored draw
-number until you get a miss.
+**Gotcha:** always pass `sppl`. The 4D page with no `sppl` returns an **empty** results block to a
+plain HTTP client, because that view is populated client-side. The TOTO page happens to render its
+latest draw server-side without one, but relying on that asymmetry is not worth the two lines it
+saves.
 
-**Backfill window** — estimates only, establish the real current draw number by probing:
+### 3.1 The draw-list index — how "latest" is actually resolved
 
-| Game | Draws/yr             | Anchor             | Est. current | Est. one year back | Requests |
-| ---- | -------------------- | ------------------ | ------------ | ------------------ | -------- |
-| TOTO | ~104 (Mon, Thu)      | 4099 = 28 Jul 2025 | ~4215        | ~4111              | ~104     |
-| 4D   | ~156 (Wed, Sat, Sun) | 5017 = 24 May 2023 | ~5530        | ~5374              | ~156     |
+Each results page fetches a static index file client-side to fill its draw dropdown. Those files are
+plain, tiny, and the authoritative answer to both "what is the latest draw" and "which draw numbers
+exist":
 
-~260 requests. At one every 2 seconds: about nine minutes.
+```
+https://www.singaporepools.com.sg/DataFileArchive/Lottery/Output/<file>
 
-The per-year figures assume every draw number corresponds to a scheduled Mon/Thu or Wed/Sat/Sun
-draw. Cascade draws may not honour that, and the 4D anchor is over three years old, so the error
-compounds. Use these to size the job, not to bound it — the backfill terminates on `draw_date`, not
-on a computed start number.
+toto_result_draw_list_en.html            TOTO, all draws
+fourd_result_draw_list_en.html           4D, all draws
+toto_result_cascade_draw_list_en.html    TOTO cascade draws only
+toto_result_hongbao_draw_list_en.html    TOTO Hongbao draws only
+```
+
+Each is a bare `<select>` and nothing else, newest first:
+
+```html
+<option queryString='sppl=RHJhd051bWJlcj00MjE3' value='4217'
+        winningSharesUploaded='True' isCancelled=''>Mon, 14 Sep 2026</option>
+```
+
+Three consequences, all of which simplify later phases:
+
+- **Nothing probes.** No upward search for "latest", no absurd draw number to discover what a miss
+  looks like, no `±3` sequence estimate. Read the list, take entry 0.
+- **Draw numbers are contiguous, and cascade and Hongbao draws share the sequence.** Confirmed on
+  15 Sep 2026: TOTO 3905–4217 is 313 entries with no gaps, 4D 5066–5535 is 470. Cascade and Hongbao
+  draws appear in the main list like any other; the two extra files are how you tell which is which,
+  and are where `toto_results.cascade_draw` comes from.
+- **The list carries `isCancelled`.** A cancelled draw has no results to parse. Note that cheerio
+  lowercases attribute names in HTML mode, so it is reachable as `iscancelled` and not otherwise —
+  a silent `undefined` if you spell it as the source does.
+
+**Backfill window** — measured from the lists on 15 Sep 2026, not estimated:
+
+| Game | Days               | List holds      | Oldest listed    | One year back     | Requests |
+| ---- | ------------------ | --------------- | ---------------- | ----------------- | -------- |
+| TOTO | Mon, Thu, some Fri | 313 (3905–4217) | Mon, 18 Sep 2023 | 4114, 18 Sep 2025 | 104      |
+| 4D   | Wed, Sat, Sun      | 470 (5066–5535) | Sat, 16 Sep 2023 | 5380, 17 Sep 2025 | 156      |
+
+260 requests for a year ending 14 Sep 2026. At one every 2 seconds: about nine minutes. These are
+counted from the lists, not derived from a draws-per-year figure, so the arithmetic that revision 7
+worried about no longer applies.
+
+Both lists reach back three years, so the one-year window in section 1 is a choice rather than a
+limit — widening it later costs only time. Size the job from the list itself: filter it by
+`draw_date` and count what remains.
 
 **Bonus field.** TOTO pages list the outlets where Group 1 and Group 2 tickets were sold. Cheap to
 capture while you're already parsing, annoying to backfill later.
@@ -222,7 +262,7 @@ capture while you're already parsing, annoying to backfill later.
 Ordered by complexity. Every phase ends with something that runs. Stop whenever it's good enough —
 phases 0–3 already give you a queryable year of results.
 
-### Phase 0 — One file, one draw ★☆☆☆☆
+### Phase 0 — One file, one draw ★☆☆☆☆ — **built**
 
 _~50 lines, an afternoon._ No database, no server, no framework.
 
@@ -251,7 +291,7 @@ project. Everything after is plumbing.
 
 ---
 
-### Phase 1 — MVP: fetch → SQLite → one endpoint ★★☆☆☆
+### Phase 1 — MVP: fetch → SQLite → one endpoint ★★☆☆☆ — **built**
 
 _A day._ The walking skeleton. TOTO only, latest draw only, one table, one route.
 
@@ -278,7 +318,7 @@ later and none of it changes this shape.
 
 ---
 
-### Phase 2 — Both games, real schema ★★☆☆☆
+### Phase 2 — Both games, real schema ★★☆☆☆ — **built**
 
 _A day or two._
 
@@ -297,21 +337,37 @@ _A day or two._
 
 **Done when:** both games round-trip from fetch to JSON response with prize data intact.
 
+**As built**, with three notes worth carrying forward:
+
+- **Migrations run when the connection opens**, not as a separate step. `queries.ts` prepares its
+  statements at import time, so anything else means preparing against tables that do not exist yet.
+  `migrate(db)` takes the connection as an argument rather than importing `client.ts`, because a
+  module cycle between the two resolves differently depending on which is imported first.
+- **The write path already has phase 5's replace semantics.** On conflict it `UPDATE`s the `draws`
+  row and replaces the child rows, keeping `draws.id` stable. Phase 3 adds an insert-if-absent path
+  next to it rather than the other way round.
+- **Reads filter on `state = 'ok'`.** That clause is what keeps phase 4's quarantined rows off the
+  public routes, and it costs nothing to write before there are any.
+
 ---
 
-### Phase 3 — Backfill a year ★★☆☆☆
+### Phase 3 — Backfill a year ★☆☆☆☆ — **next**
 
-_Half a day, plus nine minutes of waiting._
+_Half a day, plus nine minutes of waiting._ **Smaller than revision 7 assumed**: section 3.1's draw
+list removes the probing, the termination condition and the sequence arithmetic all at once.
 
-- `pnpm run backfill -- --game toto --since 2025-09-15`.
-- **Walk backwards from "latest" and stop on the date, not on a computed `--from` draw number.**
-  The section 3 estimates assume a fixed draws-per-year; cascade draws break that assumption, and
-  you'd rather not discover the drift by finding a hole in the data. Probe upward from the anchor to
-  establish "latest", then decrement until `draw_date` falls outside the window.
-- Rate limit at 0.5 req/s. Save every raw HTML to `data/raw/<game>/<drawNo>.html`.
-- Probe a nonsense draw number to learn what a miss looks like.
+- `pnpm run backfill -- --game toto --since 2025-09-16`.
+- **Fetch the draw list, filter it by `draw_date`, fetch what comes back.** That is the whole
+  algorithm. No walking backwards, no stopping condition to get right, no computed `--from`, and no
+  risk of a silent hole where a cascade draw perturbed the sequence. Skip entries flagged
+  `isCancelled`, and skip draw numbers already stored.
+- Rate limit at 0.5 req/s. Save every raw HTML to `data/raw/<game>/<drawNo>.html` — phase 2 already
+  archives to that layout.
 - Idempotent: `INSERT ... ON CONFLICT(game, draw_no) DO NOTHING`. Safe to re-run. Note that this is
-  the _backfill_ write path only — reconciliation in phase 5 needs a different one, see section 9.
+  the _backfill_ write path only — phase 2 built the replace path, and phase 5 uses that one instead;
+  see section 9.
+- Assert contiguity while you are here: the list should have no gaps, and a gap means either a
+  genuine event or a wrong assumption, both worth knowing before phase 4 writes rules about it.
 
 **Done when:** ~260 draws in the database and ~260 HTML files on disk.
 
@@ -326,6 +382,8 @@ _A day._ This is where the project becomes trustworthy.
 
 - Zod schemas with refinements enforcing the domain rules in section 7. Write those rules _after_
   the phase 3 archive exists, from what the pages actually contain — see the caveat in section 7.
+  The draw-list files give you a second, independent check for free: every stored `draw_no` should
+  appear in the list with the same `draw_date`.
 - **A quarantined draw is a row in `draws` with a `raw_path` and nothing in the typed tables.** This
   is the only version that works: `toto_results.additional_number` is NOT NULL and the child tables
   carry CHECK constraints, so a parse that fails validation is precisely the one that cannot be
@@ -337,7 +395,9 @@ _A day._ This is where the project becomes trustworthy.
   the typed rows are written and `state` flips to `ok`; if it still fails, the response says so. This
   makes `raw_path` mandatory rather than nullable.
 - **Archive sweep test:** parse and validate all ~260 stored files, assert 100% pass. This is the
-  regression suite, and phase 3 already paid for it.
+  regression suite, and phase 3 already paid for it. A one-year window contains at least one Hongbao
+  draw and several cascade draws, so the sweep is the thing that proves section 7's day rule is
+  right rather than merely plausible.
 
 **Done when:** the sweep is green, and deliberately breaking a selector produces quarantined rows
 instead of silently wrong data.
@@ -390,16 +450,19 @@ _Half a day._
 
 ### Complexity summary
 
-| Phase        | Effort | Risk              | Runnable output   |
-| ------------ | ------ | ----------------- | ----------------- |
-| 0 Spike      | ★☆☆☆☆  | Only real unknown | Printed JSON      |
-| 1 MVP        | ★★☆☆☆  | None              | Working endpoint  |
-| 2 Both games | ★★☆☆☆  | None              | Full current data |
-| 3 Backfill   | ★★☆☆☆  | Rate limiting     | A year of history |
-| 4 Validation | ★★★☆☆  | Fiddly edge cases | Trustworthy data  |
-| 5 Scheduler  | ★★★☆☆  | Timezones         | Unattended        |
-| 6 API polish | ★★★☆☆  | None              | Documented API    |
-| 7 Deploy     | ★★☆☆☆  | Backups           | Running somewhere |
+| Phase        | Effort | Risk              | Runnable output   | State |
+| ------------ | ------ | ----------------- | ----------------- | ----- |
+| 0 Spike      | ★☆☆☆☆  | Only real unknown | Printed JSON      | built |
+| 1 MVP        | ★★☆☆☆  | None              | Working endpoint  | built |
+| 2 Both games | ★★☆☆☆  | None              | Full current data | built |
+| 3 Backfill   | ★☆☆☆☆  | Rate limiting     | A year of history | next  |
+| 4 Validation | ★★★☆☆  | Fiddly edge cases | Trustworthy data  |       |
+| 5 Scheduler  | ★★★☆☆  | Timezones         | Unattended        |       |
+| 6 API polish | ★★★☆☆  | None              | Documented API    |       |
+| 7 Deploy     | ★★☆☆☆  | Backups           | Running somewhere |       |
+
+Phase 3 drops a star against revision 7: with the draw list doing the enumerating, the job is a
+filter and a loop.
 
 ---
 
@@ -407,38 +470,47 @@ _Half a day._
 
 ```
 src/
-  index.ts          Hono app + @hono/node-server bootstrap
+  index.ts          OpenAPIHono app + @hono/node-server bootstrap
   routes/
     toto.ts
     fourd.ts
-    admin.ts
+    admin.ts        phase 4
   scrape/
-    fetch.ts        rate-limited fetch + retry
+    fetch.ts        rate-limited fetch + retry, archive to data/raw/
     parse-toto.ts   cheerio selectors
     parse-4d.ts
-    url.ts          drawUrl helper
+    draw-list.ts    the <select> index — see section 3.1
+    url.ts          drawUrl + drawListUrl
+    date.ts         "Mon, 28 Jul 2025" -> "2025-07-28", shared by all parsers
+    hash.ts         content_hash over canonical JSON of extracted values
+    errors.ts       NoSuchDrawError, shared by both parsers
   db/
-    client.ts       better-sqlite3 connection + pragmas
-    migrate.ts      numbered .sql runner
+    client.ts       better-sqlite3 connection + pragmas + migrate on open
+    migrate.ts      numbered .sql runner, takes the connection as an argument
+    migrate-cli.ts  `pnpm run migrate`, reports what ran
     queries.ts      prepared statements
   schema/
     draw.ts         Zod schemas — types, validation, OpenAPI
   jobs/
     scrape.ts
-    backfill.ts
-    scheduler.ts
+    backfill.ts     phase 3
+    scheduler.ts    phase 5
 migrations/
   001_init.sql
 testdata/           saved HTML, committed
 data/
   data.db           gitignored
-  raw/              gitignored
+  raw/<game>/<drawNo>.html   gitignored
 dist/               gitignored
 tsconfig.json
 ```
 
 Flat and boring. No interfaces, no dependency injection, no `internal/`. There is one data source,
 one parser per game, one database file. Add indirection when a second implementation appears.
+
+`migrations/` is resolved from the module rather than from cwd — `src/db/` and `dist/db/` are both
+two levels below the project root, so `new URL("../../migrations/", import.meta.url)` works either
+way. It does need copying into the phase 7 image.
 
 `tsconfig.json` essentials: `"module": "nodenext"`, `"target": "es2023"`, `"strict": true`,
 `"erasableSyntaxOnly": true`. Verified to compile and emit under TypeScript 7.0.2. With `nodenext`
@@ -563,6 +635,15 @@ Things that will bite if ignored:
   after opening. `foreign_keys` in particular is off by default and silently so.
 - **One writer at a time.** WAL plus a 5-second busy timeout covers the API reading while the
   scheduler writes. At five draws a week you will never see contention.
+- **`cascade_draw` does not come from the page.** Nothing in the TOTO results markup says a draw was
+  a cascade draw; the flag comes from membership in `toto_result_cascade_draw_list_en.html`. The
+  Hongbao list works the same way if a Hongbao flag is ever wanted.
+
+`migrations/001_init.sql` is the authoritative version of the above. It differs only by tightening:
+CHECK constraints on `additional_number` and on the 0/1 booleans, an index on
+`toto_winning_outlets (draw_id)`, and the `fourd_prize_schedule` seed rows. Note that the seeded
+`effective_from` is the archive floor — the oldest draw the site still lists — and not a verified
+date on which the published schedule changed.
 
 ---
 
@@ -575,16 +656,18 @@ safety net. Encode these as Zod refinements:
 - TOTO: exactly 6 numbers, each 1–49, all distinct; additional number 1–49 and not among the six.
 - TOTO prize groups: exactly 7 rows. Group 1 showing `-` is a legitimate NULL, not a failure.
 - 4D: exactly 23 numbers — 1st, 2nd, 3rd, 10 Starter, 10 Consolation — each matching `/^\d{4}$/`.
-- Draw date lands on a valid draw day: TOTO Mon/Thu, 4D Wed/Sat/Sun.
+- **No day-of-week rule.** Revision 7 validated the draw date against a fixed weekday set, and
+  revision 8 tried to patch it by adding Friday. Neither is safe: the schedule is the operator's to
+  change, special draws already break it, and a rule that encodes a timetable quarantines good data
+  the moment the timetable moves. The draw-list check below covers what the day rule was reaching
+  for — that the date belongs to the draw — without assuming anything about when draws happen.
 - **The draw number parsed from the page equals the one you requested.** This catches the nastiest
   failure mode — the site quietly serving the latest draw when it doesn't recognise your `sppl`.
-- Draw number within ±3 of the expected sequence position, catching off-by-one backfill bugs.
-
-**Treat the last two rules as provisional until the archive exists.** Both assume cascade and
-Hongbao draws behave like ordinary ones — which is open question 4 in section 11. If a cascade draw
-takes its own draw number, the sequence estimate drifts and ±3 starts quarantining good rows; if a
-Hongbao draw falls on an unusual weekday, the day rule fires on it. This is exactly why phase 3
-comes before phase 4: derive these two thresholds from 260 real draws rather than from arithmetic.
+  Phase 2 enforces this in the scrape job already.
+- **The draw number and date appear together in the draw list.** This replaces revision 7's "within
+  ±3 of the expected sequence position" rule, which existed only because there was no authoritative
+  list to check against. There is one (section 3.1), so check against it: an exact match against
+  published data beats a tolerance window around an estimate, and it does not drift.
 
 Failures go to `state = 'quarantined'`, never to public endpoints. At 260 records a year, reviewing
 every quarantined row by hand is completely feasible.
@@ -609,11 +692,14 @@ export async function fetchDraw(game: Game, drawNo: number): Promise<string> {
 }
 ```
 
-- Write the HTML to `data/raw/` **before** parsing. Every parse bug becomes replayable, and widening
-  the backfill window later is additive.
-- Detect "no such draw" by response _shape_, not status code — the site may well return 200 with an
-  empty results block. Both the upward probe for "latest" and the backfill loop terminate on this
-  signal, so pin the behaviour down in phase 3 against a deliberately absurd draw number.
+- Write the HTML to `data/raw/<game>/<drawNo>.html` **before** parsing. Every parse bug becomes
+  replayable, and widening the backfill window later is additive.
+- Detect "no such draw" by response _shape_, not status code: the site returns 200 with an empty
+  `.divSingleDraw`. Both parsers treat a missing *or childless* results block as `NoSuchDrawError`.
+  This is no longer a loop-termination condition anywhere — the draw list says which draws exist —
+  so it is now purely a guard against asking for something that isn't there.
+- The draw-list files are static and small. Fetching one costs a request but saves the probing that
+  revision 7 budgeted for, so the polite-rate arithmetic in section 3 is unchanged.
 
 ---
 
@@ -624,17 +710,19 @@ export async function fetchDraw(game: Game, drawNo: number): Promise<string> {
 | TOTO | Mon, Thu      | 18:30 (cascade draws 21:30) |
 | 4D   | Wed, Sat, Sun | 18:30                       |
 
-Draw-day capture from 18:45 SGT: probe `last_known + 1` every 10 minutes, stop on first successful
-write or after 90 minutes. Extra 21:45 window on TOTO days.
+Draw-day capture from 18:45 SGT: poll the draw list every 10 minutes and fetch anything newer than
+what is stored; stop on first successful write or after 90 minutes. Extra 21:45 window on TOTO days.
+Polling the list rather than guessing `last_known + 1` also means a cancelled draw announces itself
+instead of looking like a page that has not published yet.
 
 Daily 03:00 SGT reconciliation over the last 7 days, comparing `content_hash` — prize tables get
 corrected after publication, and `UNIQUE (game, draw_no)` makes the re-check cheap.
 
-**Reconciliation needs its own write path.** The backfill's `ON CONFLICT DO NOTHING` would discard
-exactly the corrections this job exists to catch. On a hash mismatch: inside one transaction, delete
-the child rows for that `draw_id`, insert the new ones, and update `content_hash` and `scraped_at`
-on the `draws` row. Don't delete the `draws` row and let the FK cascade do it — that changes the
-`id`, which anything holding a reference will not thank you for.
+**Reconciliation needs its own write path**, and phase 2 already built it: `writeToto` / `writeFourd`
+upsert the `draws` row and replace the child rows inside one transaction, leaving `draws.id` alone.
+The backfill's `ON CONFLICT DO NOTHING` is the other path, and using it here would discard exactly
+the corrections this job exists to catch. Never delete the `draws` row and let the FK cascade clear
+the children — that changes the `id`, which anything holding a reference will not thank you for.
 
 Use `Intl.DateTimeFormat` with `timeZone: 'Asia/Singapore'` to evaluate the window rather than doing
 offset arithmetic. Singapore has no DST, so this is easier than most timezone work, but hardcoding
@@ -659,17 +747,40 @@ reversible.
 - **Route tests** via `app.request("/toto/latest")` — Hono's built-in test helper, no server and no
   `@hono/node-server` needed.
 - **Nightly smoke test** hitting one live URL and alerting on parser drift. This is now your only
-  early warning for a site redesign, so point it somewhere you'll actually see it.
+  early warning for a site redesign, so point it somewhere you'll actually see it. Fetching a draw
+  list too is nearly free and catches a different failure: the index moving or changing shape would
+  break "latest" for both games at once.
 
 ---
 
 ## 11. Remaining unknowns
 
-1. Does `sr/Pages/fourd_results.aspx` exist? Cheap to probe, leaner to parse if it does.
-2. Current draw numbers — probe upward from the section 3 anchors on first run. Don't hardcode.
-3. How does the site respond to an out-of-range draw number? Phase 3 depends on knowing this.
-4. How are cascade and Hongbao draws represented — same draw-number sequence, or separate? Section 7's
-   day-of-week and ±3 sequence rules both depend on the answer. A one-year window should include at
-   least one Hongbao draw (February); confirm it parses before calling phase 4 done.
-5. Does `@types/better-sqlite3@9.x` cover the v13 API surface you touch? Four majors of naming gap
-   is enough to check rather than assume.
+Answered by building phases 0–2 (15 Sep 2026):
+
+1. ~~Does `sr/Pages/fourd_results.aspx` exist?~~ **Moot.** `product/pages/4d_results.aspx` parses in
+   about 50 lines — three prize cells by class, two tbodies of ten — so a leaner page would buy
+   nothing.
+2. ~~Current draw numbers — probe upward from the anchors.~~ **No probing.** The draw lists in
+   section 3.1 are authoritative and current: TOTO 4217 (Mon, 14 Sep 2026), 4D 5535 (Sun, 13 Sep
+   2026).
+3. ~~How does the site respond to an out-of-range draw number?~~ **200 with an empty
+   `.divSingleDraw`** — the same shape as the unparameterised 4D page. Both parsers treat a missing
+   or childless block as a miss. Phase 3 no longer depends on this, since nothing loops until a miss.
+4. ~~How are cascade and Hongbao draws represented?~~ **Same sequence, same list.** Draw numbers are
+   contiguous across both. The separate cascade and Hongbao list files identify them. Hongbao draws
+   fall on Fridays, which is what killed section 7's old weekday rule.
+5. ~~Does `@types/better-sqlite3@9.x` cover the v13 API surface?~~ **Yes** for everything phase 2
+   touches: `pragma`, `prepare`, `transaction`, `get`/`all`/`run`, and `RETURNING` via `.get()`.
+   `tsc --noEmit` is clean under TypeScript 7 with `strict` and `noUncheckedIndexedAccess`.
+
+Still open:
+
+6. **Does the draw list ever lag the results page?** If the page publishes a draw before the index
+   lists it, phase 5's draw-day window would sit idle until the index catches up. Watch the first
+   couple of live draws; falling back to `last_known + 1` after, say, 30 quiet minutes is a cheap
+   hedge if it turns out to lag.
+7. **What does a cancelled draw actually look like?** `isCancelled` exists in the markup but no draw
+   in the current three-year window has it set, so the results-page shape for one is unverified.
+8. **The 4D prize schedule's real effective date.** The seeded amounts are the published ones, but
+   `effective_from` is the archive floor rather than a date anything confirms. The prize-structure
+   pages 302 away from a plain client; if per-bet payouts ever matter, chase it then.

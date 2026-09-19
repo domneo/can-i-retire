@@ -39,9 +39,14 @@ export async function fetchPage(url: string): Promise<string> {
  * Archive the page before parsing it. Every parse bug stays replayable and
  * re-parsing later never needs the network.
  */
-export async function archive(name: string, html: string): Promise<string> {
-  const path = `data/raw/${name}.html`;
-  await mkdir("data/raw", { recursive: true });
+export async function archive(
+  game: string,
+  drawNo: number,
+  html: string,
+): Promise<string> {
+  const dir = `data/raw/${game}`;
+  const path = `${dir}/${drawNo}.html`;
+  await mkdir(dir, { recursive: true });
   await writeFile(path, html);
   return path;
 }

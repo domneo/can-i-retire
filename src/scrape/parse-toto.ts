@@ -5,6 +5,8 @@
 // regex for a draw number matches the wrong thing.
 
 import * as cheerio from "cheerio";
+import { isoDate } from "./date.js";
+import { NoSuchDrawError } from "./errors.js";
 
 export interface PrizeGroup {
   group: number;
@@ -30,29 +32,7 @@ export interface TotoDraw {
   outlets: Outlet[];
 }
 
-/** Thrown when the page loads but carries no results block. */
-export class NoSuchDrawError extends Error {
-  constructor(message = "page served no results block") {
-    super(message);
-    this.name = "NoSuchDrawError";
-  }
-}
-
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
-
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-/** "Mon, 28 Jul 2025" -> "2025-07-28" */
-function isoDate(text: string): string {
-  const m = clean(text).match(/(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})/);
-  if (!m) throw new Error(`unparseable draw date: ${JSON.stringify(text)}`);
-  const month = MONTHS.indexOf(m[2]!);
-  if (month < 0) throw new Error(`unknown month: ${m[2]}`);
-  return `${m[3]}-${String(month + 1).padStart(2, "0")}-${m[1]!.padStart(2, "0")}`;
-}
 
 /** "$5,853,782" -> 585378200 cents. "-" / "" -> null. */
 function cents(text: string): number | null {
@@ -76,7 +56,7 @@ function count(text: string): number | null {
 export function parseToto(html: string): TotoDraw {
   const $ = cheerio.load(html);
   const root = $(".divSingleDraw").first();
-  if (root.length === 0) throw new NoSuchDrawError();
+  if (root.length === 0 || root.children().length === 0) throw new NoSuchDrawError();
 
   const drawNoText = clean(root.find("th.drawNumber").first().text());
   const drawNo = Number(drawNoText.match(/(\d+)/)?.[1]);

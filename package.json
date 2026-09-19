@@ -9,7 +9,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "scrape": "tsx --env-file-if-exists=.env src/jobs/scrape.ts",
-    "spike": "tsx scratch/spike.ts"
+    "spike": "tsx scratch/spike.ts",
+    "migrate": "tsx --env-file-if-exists=.env src/db/migrate-cli.ts",
+    "test": "tsx --test \"src/**/*.test.ts\""
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
@@ -19,8 +21,10 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
+    "@hono/zod-openapi": "^1.6.3",
     "better-sqlite3": "^13.0.3",
     "cheerio": "^1.2.0",
-    "hono": "^4.13.7"
+    "hono": "^4.13.7",
+    "zod": "^4.6.5"
   }
 }
