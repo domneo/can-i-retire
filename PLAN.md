@@ -221,8 +221,14 @@ toto_result_hongbao_draw_list_en.html    TOTO Hongbao draws only
 Each is a bare `<select>` and nothing else, newest first:
 
 ```html
-<option queryString='sppl=RHJhd051bWJlcj00MjE3' value='4217'
-        winningSharesUploaded='True' isCancelled=''>Mon, 14 Sep 2026</option>
+<option
+  queryString="sppl=RHJhd051bWJlcj00MjE3"
+  value="4217"
+  winningSharesUploaded="True"
+  isCancelled=""
+>
+  Mon, 14 Sep 2026
+</option>
 ```
 
 Three consequences, all of which simplify later phases:
@@ -351,7 +357,7 @@ _A day or two._
 
 ---
 
-### Phase 3 — Backfill a year ★☆☆☆☆ — **next**
+### Phase 3 — Backfill a year ★☆☆☆☆ — **built**
 
 _Half a day, plus nine minutes of waiting._ **Smaller than revision 7 assumed**: section 3.1's draw
 list removes the probing, the termination condition and the sequence arithmetic all at once.
@@ -374,9 +380,24 @@ list removes the probing, the termination condition and the sequence arithmetic 
 **Why here:** from this point parser work is a fast offline loop against a year of real edge cases,
 with no network in the way.
 
+**As built**, with four notes worth carrying forward:
+
+- **The limiter lives in `fetchPage`, not in the job.** One module-level slot reservation, advanced
+  synchronously before the first `await`, so every caller in the process queues behind it — the
+  scrape job is politely rate-limited now too, for free.
+- **Both draw-number and draw-date are checked against the list entry.** The plan only called for
+  the draw number; comparing the date as well costs nothing and is section 7's draw-list rule
+  already half-written, a phase early.
+- **A failed page does not abandon the run.** Failures are collected and reported at the end, and
+  the run is recorded in `scrape_runs` (`kind = 'backfill'`, previously an unused table). Re-running
+  picks up exactly what is missing, since the write path is insert-if-absent.
+- **Contiguity is reported, not enforced.** `findGaps` warns and the run continues: the job
+  enumerates the list itself, so a hole in the sequence changes nothing about what it fetches. Both
+  lists were gap-free at the time of the run.
+
 ---
 
-### Phase 4 — Validation and quarantine ★★★☆☆
+### Phase 4 — Validation and quarantine ★★★☆☆ — **next**
 
 _A day._ This is where the project becomes trustworthy.
 
@@ -455,8 +476,8 @@ _Half a day._
 | 0 Spike      | ★☆☆☆☆  | Only real unknown | Printed JSON      | built |
 | 1 MVP        | ★★☆☆☆  | None              | Working endpoint  | built |
 | 2 Both games | ★★☆☆☆  | None              | Full current data | built |
-| 3 Backfill   | ★☆☆☆☆  | Rate limiting     | A year of history | next  |
-| 4 Validation | ★★★☆☆  | Fiddly edge cases | Trustworthy data  |       |
+| 3 Backfill   | ★☆☆☆☆  | Rate limiting     | A year of history | built |
+| 4 Validation | ★★★☆☆  | Fiddly edge cases | Trustworthy data  | next  |
 | 5 Scheduler  | ★★★☆☆  | Timezones         | Unattended        |       |
 | 6 API polish | ★★★☆☆  | None              | Documented API    |       |
 | 7 Deploy     | ★★☆☆☆  | Backups           | Running somewhere |       |
@@ -695,7 +716,7 @@ export async function fetchDraw(game: Game, drawNo: number): Promise<string> {
 - Write the HTML to `data/raw/<game>/<drawNo>.html` **before** parsing. Every parse bug becomes
   replayable, and widening the backfill window later is additive.
 - Detect "no such draw" by response _shape_, not status code: the site returns 200 with an empty
-  `.divSingleDraw`. Both parsers treat a missing *or childless* results block as `NoSuchDrawError`.
+  `.divSingleDraw`. Both parsers treat a missing _or childless_ results block as `NoSuchDrawError`.
   This is no longer a loop-termination condition anywhere — the draw list says which draws exist —
   so it is now purely a guard against asking for something that isn't there.
 - The draw-list files are static and small. Fetching one costs a request but saves the probing that

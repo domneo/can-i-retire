@@ -38,3 +38,20 @@ export function parseDrawList(html: string): DrawListEntry[] {
   if (entries.length === 0) throw new Error("draw list contained no options");
   return entries;
 }
+
+/**
+ * Draw numbers missing from an otherwise contiguous list.
+ *
+ * Cascade and Hongbao draws share the main sequence, so a healthy list has no
+ * gaps at all. A gap is therefore either a real event or a wrong assumption —
+ * worth reporting, but not worth refusing to back fill over, since the list
+ * itself is what gets enumerated either way.
+ */
+export function findGaps(entries: DrawListEntry[]): number[] {
+  const present = new Set(entries.map((e) => e.drawNo));
+  const gaps: number[] = [];
+  for (let n = Math.min(...present) + 1; n < Math.max(...present); n++) {
+    if (!present.has(n)) gaps.push(n);
+  }
+  return gaps;
+}

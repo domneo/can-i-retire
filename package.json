@@ -11,6 +11,7 @@
     "scrape": "tsx --env-file-if-exists=.env src/jobs/scrape.ts",
     "spike": "tsx scratch/spike.ts",
     "migrate": "tsx --env-file-if-exists=.env src/db/migrate-cli.ts",
+    "backfill": "tsx --env-file-if-exists=.env src/jobs/backfill.ts",
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "devDependencies": {
