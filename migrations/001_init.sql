@@ -9,7 +9,6 @@ CREATE TABLE draws (
   game         TEXT    NOT NULL CHECK (game IN ('toto','4d')),
   draw_no      INTEGER NOT NULL,
   draw_date    TEXT    NOT NULL,            -- 'YYYY-MM-DD', SGT calendar date
-  state        TEXT    NOT NULL DEFAULT 'ok' CHECK (state IN ('ok','quarantined')),
   source       TEXT    NOT NULL DEFAULT 'selector' CHECK (source IN ('selector','manual')),
   raw_path     TEXT    NOT NULL,            -- data/raw/toto/4099.html
   content_hash TEXT    NOT NULL,            -- hash of the extracted values, not the page

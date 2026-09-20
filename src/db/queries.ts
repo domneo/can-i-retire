@@ -31,7 +31,6 @@ const upsertDraw = db.prepare(`
     draw_date    = excluded.draw_date,
     raw_path     = excluded.raw_path,
     content_hash = excluded.content_hash,
-    state        = 'ok',
     scraped_at   = datetime('now')
   RETURNING id
 `);
@@ -182,7 +181,7 @@ export const insertFourdIfAbsent = db.transaction(
   },
 );
 
-/** Draw numbers already stored for a game, in any state. */
+/** Draw numbers already stored for a game. */
 const storedDrawNosStmt = db.prepare(
   "SELECT draw_no FROM draws WHERE game = ?",
 );
@@ -240,15 +239,15 @@ interface DrawRow {
   scraped_at: string;
 }
 
-// Only state='ok' rows are ever served. Phase 4 starts writing 'quarantined'
-// ones; this clause is what keeps them off the public routes.
+// Every stored draw is servable: a parse that fails never reaches the write
+// path, so there is nothing to filter out here.
 const latestRowStmt = db.prepare(
   `SELECT id, draw_no, draw_date, scraped_at FROM draws
-   WHERE game = ? AND state = 'ok' ORDER BY draw_no DESC LIMIT 1`,
+   WHERE game = ? ORDER BY draw_no DESC LIMIT 1`,
 );
 const rowByNoStmt = db.prepare(
   `SELECT id, draw_no, draw_date, scraped_at FROM draws
-   WHERE game = ? AND state = 'ok' AND draw_no = ?`,
+   WHERE game = ? AND draw_no = ?`,
 );
 
 const latestRow = (game: Game) =>
