@@ -24,6 +24,7 @@ import {
   storedDrawNos,
   type WriteMeta,
 } from "../db/queries.js";
+import { reportRun } from "../notify/report.js";
 
 // --- arguments -------------------------------------------------------------
 
@@ -121,7 +122,7 @@ async function cascadeDrawNos(): Promise<Set<number>> {
  * so what came back must be what was asked for. Checking the date too makes
  * the draw list a second, independent source for it.
  */
-function agrees(
+function assertMatchesDrawList(
   draw: { drawNo: number; drawDate: string },
   entry: DrawListEntry,
 ): void {
@@ -142,7 +143,7 @@ function store(
 ): boolean {
   if (game === "toto") {
     const draw = parseToto(html);
-    agrees(draw, entry);
+    assertMatchesDrawList(draw, entry);
     const meta: WriteMeta = {
       rawPath,
       contentHash: contentHash(draw),
@@ -154,7 +155,7 @@ function store(
   }
 
   const draw = parse4d(html);
-  agrees(draw, entry);
+  assertMatchesDrawList(draw, entry);
   return (
     insertFourdIfAbsent(draw, { rawPath, contentHash: contentHash(draw) }) !==
     undefined
@@ -189,12 +190,15 @@ async function backfill(game: Game, todo: DrawListEntry[]): Promise<void> {
     }
   }
 
-  finishRun(runId, {
+  const run = finishRun(runId, {
     status: failures.length > 0 ? "error" : "ok",
     pagesFetched: fetched,
     drawsWritten: written,
     error: failures.length > 0 ? failures.join("\n") : undefined,
   });
+  // Counts and failures only: a backfill writes hundreds of draws, and
+  // hundreds of draw lines is not a notification.
+  await reportRun(run);
 
   console.log(
     `${game}: fetched ${fetched}, wrote ${written}, failed ${failures.length}`,

@@ -55,6 +55,34 @@ already has, so an interrupted run just needs running again.
 One failed page does not abandon the run: failures are collected, reported at
 the end, and recorded in `scrape_runs` along with the page and write counts.
 
+### Scrape reports
+
+Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` and every run posts one message
+per game to that chat, so an unattended job is visible without reading logs.
+Leave either unset and nothing is sent — no request is made at all, and the job
+behaves exactly as before.
+
+```
+✅ <b>TOTO manual — ok</b>
+1 draw written · 3 pages · 5s
+TOTO 4218 · Thu 17 Sep 2026 · 17 19 23 35 36 39 (+49) · Group 1 $1,248,856 · [snowballed]
+```
+
+```
+🚨 <b>TOTO manual — FAILED</b>
+0 draws written · 2 pages · 2s · 1 failure
+<code>toto 4218: page served no results block</code>
+```
+
+The failure message is the point of the feature. A parser broken by a site
+redesign writes no draws, and no draws is exactly what a quiet week looks like;
+only an explicit alert tells the two apart. A backfill reports the same way, but
+counts only — hundreds of draw lines is not a notification.
+
+The message is built from the run's `scrape_runs` row, so the chat and the
+database cannot disagree. A send that fails is logged and swallowed: a
+notification is not worth failing a scrape over.
+
 ### Routes
 
 | Route           | Returns               |
@@ -106,6 +134,7 @@ src/index.ts       OpenAPIHono app
 src/routes/        typed routes, one file per game
 src/schema/        Zod schemas — types, validation, and phase 6's OpenAPI doc
 src/jobs/          scrape and backfill entry points
+src/notify/        Telegram transport and the run report it sends
 src/scrape/        URL building, fetching, HTML parsing
 src/db/            SQLite client, migration runner, queries
 migrations/        numbered .sql, applied on connect
@@ -144,8 +173,10 @@ draw number first.
 
 ## Config
 
-| Variable          | Default        | Purpose                      |
-| ----------------- | -------------- | ---------------------------- |
-| `SGPOOLS_CONTACT` | —              | Contact string in User-Agent |
-| `SGPOOLS_DB`      | `data/data.db` | SQLite file location         |
-| `PORT`            | `3000`         | Server port                  |
+| Variable             | Default        | Purpose                        |
+| -------------------- | -------------- | ------------------------------ |
+| `SGPOOLS_CONTACT`    | —              | Contact string in User-Agent   |
+| `SGPOOLS_DB`         | `data/data.db` | SQLite file location           |
+| `PORT`               | `3000`         | Server port                    |
+| `TELEGRAM_BOT_TOKEN` | —              | Unset disables scrape reports  |
+| `TELEGRAM_CHAT_ID`   | —              | Chat the reports are sent to   |

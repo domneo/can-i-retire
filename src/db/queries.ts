@@ -209,9 +209,34 @@ const finishRunStmt = db.prepare(`
   WHERE id = @id
 `);
 
+/** Everything a scrape report needs, read back from the row the run wrote. */
+export interface RunRow {
+  id: number;
+  kind: string;
+  game: Game;
+  status: "running" | "ok" | "error";
+  pages_fetched: number;
+  draws_written: number;
+  /** Failure lines joined by newlines, as the job collected them. */
+  error: string | null;
+  /** Wall-clock seconds, or null while the run has no finished_at yet. */
+  duration_seconds: number | null;
+}
+
+// started_at and finished_at are second-granularity `datetime('now')` text, so
+// the duration is computed in SQL rather than kept on a timer in the job: one
+// source of truth, and it survives a report sent from anywhere but the run.
+const runRowStmt = db.prepare(`
+  SELECT id, kind, game, status, pages_fetched, draws_written, error,
+         CAST(ROUND((julianday(finished_at) - julianday(started_at)) * 86400)
+              AS INTEGER) AS duration_seconds
+  FROM scrape_runs WHERE id = ?
+`);
+
 export const startRun = (kind: string, game: Game): number =>
   (startRunStmt.get(kind, game) as { id: number }).id;
 
+/** Closes the run and returns the stored row, ready to report on. */
 export function finishRun(
   id: number,
   r: {
@@ -220,7 +245,7 @@ export function finishRun(
     drawsWritten: number;
     error?: string;
   },
-): void {
+): RunRow {
   finishRunStmt.run({
     id,
     status: r.status,
@@ -228,6 +253,7 @@ export function finishRun(
     draws_written: r.drawsWritten,
     error: r.error ?? null,
   });
+  return runRowStmt.get(id) as RunRow;
 }
 
 // --- reads -----------------------------------------------------------------
