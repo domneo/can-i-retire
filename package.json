@@ -25,6 +25,7 @@
     "@hono/zod-openapi": "^1.6.3",
     "better-sqlite3": "^13.0.3",
     "cheerio": "^1.2.0",
+    "grammy": "^1.46.0",
     "hono": "^4.13.7",
     "zod": "^4.6.5"
   }

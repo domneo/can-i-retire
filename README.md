@@ -134,7 +134,7 @@ src/index.ts       OpenAPIHono app
 src/routes/        typed routes, one file per game
 src/schema/        Zod schemas — types, validation, and phase 6's OpenAPI doc
 src/jobs/          scrape and backfill entry points
-src/notify/        Telegram transport and the run report it sends
+src/notify/        Telegram transport (grammY) and the run report it sends
 src/scrape/        URL building, fetching, HTML parsing
 src/db/            SQLite client, migration runner, queries
 migrations/        numbered .sql, applied on connect

@@ -1,15 +1,16 @@
-// Telegram transport. Plain fetch against the Bot API — one method, no SDK.
+// Telegram transport. grammY's bare Api client — no Bot, no polling, just
+// sendMessage.
 //
 // Nothing here ever throws. A notification is not worth failing a scrape over,
 // so every failure is logged and swallowed; the caller gets a boolean it is
 // free to ignore.
 
-const API = "https://api.telegram.org";
+import { Api, GrammyError } from "grammy";
 
 /** Telegram rejects a longer `text` outright. */
 const MAX_TEXT = 4096;
 
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_SECONDS = 15;
 
 /** HTML parse_mode needs exactly these three escaped, and nothing else. */
 export function escapeHtml(text: string): string {
@@ -48,31 +49,19 @@ export async function sendTelegram(text: string): Promise<boolean> {
   if (!token || !chatId) return false;
 
   try {
-    const res = await fetch(`${API}/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: truncate(text),
-        parse_mode: "HTML",
-      }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-
-    // The API answers 200 with `ok: false` for a bad chat id or malformed
-    // entities, so the status line alone does not mean the message arrived.
-    const body = (await res.json()) as { ok?: boolean; description?: string };
-    if (body.ok === true) return true;
-
-    console.error(
-      `telegram: send failed — HTTP ${res.status}` +
-        (body.description ? `: ${body.description}` : ""),
-    );
-    return false;
+    const api = new Api(token, { timeoutSeconds: TIMEOUT_SECONDS });
+    await api.sendMessage(chatId, truncate(text), { parse_mode: "HTML" });
+    return true;
   } catch (err) {
-    console.error(
-      `telegram: send failed — ${err instanceof Error ? err.message : String(err)}`,
-    );
+    // GrammyError covers the API saying no (bad chat id, malformed entities);
+    // anything else is the network or the timeout.
+    const reason =
+      err instanceof GrammyError
+        ? `${err.error_code}: ${err.description}`
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    console.error(`telegram: send failed — ${reason}`);
     return false;
   }
 }
