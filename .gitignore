@@ -11,3 +11,6 @@ dist/
 .claude/skills
 skills-lock.json
 .claude/settings.local.json
+
+# pnpm only: npm lockfiles are never committed
+package-lock.json
