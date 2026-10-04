@@ -11,6 +11,7 @@
     "scrape": "tsx --env-file-if-exists=.env.local src/jobs/scrape.ts",
     "migrate": "tsx --env-file-if-exists=.env.local src/db/migrate-cli.ts",
     "backfill": "tsx --env-file-if-exists=.env.local src/jobs/backfill.ts",
+    "webhook": "tsx --env-file-if-exists=.env.local src/bot/set-webhook.ts",
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "devDependencies": {

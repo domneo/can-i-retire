@@ -133,6 +133,44 @@ curl http://localhost:3000/toto/latest
 4D numbers are strings, not integers: `0427` is a different 4D number from
 `427`, and an integer column loses the distinction.
 
+## Bot
+
+The Telegram bot answers in private chats; group messages are ignored.
+
+| Message                        | Reply                                                           |
+| ------------------------------ | --------------------------------------------------------------- |
+| `/retire` or "Can I retire?"   | Your 10 newest tickets, checked against each game's latest draw |
+| `0427`                         | Saves a 4D ticket, then checks it                               |
+| `2 14 16 21 36 47` (6–12 nums) | Saves a TOTO ticket (System entries too), then checks it        |
+| Anything else                  | The number format rule                                          |
+
+```
+🎉 <b>You can retire!!!</b>
+
+<b>TOTO 4217</b> · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)
+• 2 14 16 21 36 47 — Group 1 $1,553,027
+```
+
+A typed ticket names no draw, so it is stored unbound and always checked
+against the latest stored draw of its game. When no draw of that game is
+stored, the reply says results are not published yet; it never reports a loss
+without results to back it. TOTO amounts come from the draw's prize groups,
+and a System entry is checked as every six-number combination it covers. 4D
+checks a straight match only and quotes the Big and Small payout per $1 from
+`fourd_prize_schedule`.
+
+Telegram delivers updates to `POST /telegram/webhook`. The route refuses
+everything until both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` are
+set, and then accepts only requests carrying that secret. Register the webhook
+once per deployment URL:
+
+```sh
+pnpm webhook https://<deployment-host>
+```
+
+Not built yet: photo tickets, draw-bound tickets, pushes when results land,
+`/subscribe`, and `/suggest`.
+
 ## Deployment
 
 The API runs on Vercel as one function (`src/index.ts`'s default export), in
@@ -166,7 +204,8 @@ vercel crons run /cron/scrape
 | `pnpm build`     | Compile TypeScript to `dist/` |
 | `pnpm start`     | Run the compiled server       |
 | `pnpm typecheck` | Type-check without emitting   |
-| `pnpm test`      | Golden-file parser tests      |
+| `pnpm webhook`   | Register the bot's webhook    |
+| `pnpm test`      | Parser, bot and query tests   |
 | `pnpm migrate`   | Apply pending migrations      |
 
 ## Layout

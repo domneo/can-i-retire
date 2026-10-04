@@ -8,6 +8,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import "hono";
 import { cron } from "./routes/cron.js";
 import { fourd } from "./routes/fourd.js";
+import { telegram } from "./routes/telegram.js";
 import { toto } from "./routes/toto.js";
 
 // defaultHook turns a Zod failure into a 400 instead of letting it become a
@@ -26,6 +27,7 @@ export const app = new OpenAPIHono({
 app.route("/", toto);
 app.route("/", fourd);
 app.route("/", cron);
+app.route("/", telegram);
 
 // `app.doc()` and a docs UI land in phase 6, over these same schemas.
 
