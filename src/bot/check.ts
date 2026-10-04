@@ -2,7 +2,7 @@
 // itself. The one place the bot's reads meet the evaluator.
 
 import { drawNoOn, fourdByDrawNo, recentDraws, totoByDrawNo } from "../db/queries.js";
-import { fourdSchedule } from "../db/tickets.js";
+import { fourdSchedule, type SavedTicket } from "../db/tickets.js";
 import type { Game } from "../scrape/url.js";
 import { sgtToday, upcomingDrawDate } from "./drawdays.js";
 import { evaluateFourd, evaluateToto } from "./evaluate.js";
@@ -23,18 +23,32 @@ export async function drawOptions(game: Game, now: Date): Promise<DrawOptions> {
   return { past, upcoming: upcomingDrawDate(game, past[0]?.drawDate, now) };
 }
 
-/** `draw: null` when that draw is not stored: never reported as a loss. */
-export async function checkDraw(ticket: Ticket, drawNo: number): Promise<Checked> {
-  if (ticket.game === "toto") {
+/** Checks tickets of one game against one draw, or null if it is not stored. */
+async function drawChecker(
+  game: Game,
+  drawNo: number,
+): Promise<((ticket: Ticket) => Checked) | null> {
+  if (game === "toto") {
     const draw = await totoByDrawNo(drawNo);
-    return draw
-      ? { ticket, draw, outcome: evaluateToto(ticket.numbers, draw) }
-      : { ticket, draw: null };
+    if (!draw) return null;
+    return (ticket) =>
+      ticket.game === "toto"
+        ? { ticket, draw, outcome: evaluateToto(ticket.numbers, draw) }
+        : { ticket, draw: null };
   }
   const draw = await fourdByDrawNo(drawNo);
-  if (!draw) return { ticket, draw: null };
+  if (!draw) return null;
   const schedule = await fourdSchedule(draw.drawDate);
-  return { ticket, draw, outcome: evaluateFourd(ticket.number, draw, schedule) };
+  return (ticket) =>
+    ticket.game === "4d"
+      ? { ticket, draw, outcome: evaluateFourd(ticket.number, draw, schedule) }
+      : { ticket, draw: null };
+}
+
+/** `draw: null` when that draw is not stored: never reported as a loss. */
+export async function checkDraw(ticket: Ticket, drawNo: number): Promise<Checked> {
+  const check = await drawChecker(ticket.game, drawNo);
+  return check ? check(ticket) : { ticket, draw: null };
 }
 
 /**
@@ -50,4 +64,42 @@ export async function checkUpcoming(
   const drawNo = await drawNoOn(ticket.game, date);
   if (drawNo !== undefined) return checkDraw(ticket, drawNo);
   return date < sgtToday(now) ? { ticket, draw: null } : "not drawn";
+}
+
+/** Every saved ticket for one draw, checked against it. */
+export interface SavedDraw {
+  game: Game;
+  date: string;
+  /** The date is today or later and no results are stored yet. */
+  notDrawn: boolean;
+  /** One per ticket, in the order saved. `draw: null` while not stored. */
+  checked: Checked[];
+}
+
+/**
+ * The /retire check: each saved ticket against the draw it was saved for.
+ * Tickets for the same draw share one lookup. Draws keep the order of
+ * `saved`, which is newest first.
+ */
+export async function checkSaved(saved: SavedTicket[], now: Date): Promise<SavedDraw[]> {
+  const byDraw = new Map<string, { game: Game; date: string; tickets: Ticket[] }>();
+  for (const { ticket, drawDate } of saved) {
+    const key = `${ticket.game}:${drawDate}`;
+    const group = byDraw.get(key) ?? { game: ticket.game, date: drawDate, tickets: [] };
+    group.tickets.push(ticket);
+    byDraw.set(key, group);
+  }
+
+  return Promise.all(
+    [...byDraw.values()].map(async ({ game, date, tickets }) => {
+      const drawNo = await drawNoOn(game, date);
+      const check = drawNo === undefined ? null : await drawChecker(game, drawNo);
+      return {
+        game,
+        date,
+        notDrawn: !check && date >= sgtToday(now),
+        checked: tickets.map((ticket) => (check ? check(ticket) : { ticket, draw: null })),
+      };
+    }),
+  );
 }

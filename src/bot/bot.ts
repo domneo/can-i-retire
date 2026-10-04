@@ -3,14 +3,15 @@
 //
 // A check is two steps. Numbers in, and the bot offers the upcoming draw and
 // the last few stored ones as buttons. A button press checks the numbers
-// against that one draw.
+// against that one draw. Picking the upcoming draw also saves the ticket, and
+// /retire checks every saved ticket against the draw it was saved for.
 //
 // Private chats only (PRD: group chats are out of scope for v1). Anything
 // from a group is ignored rather than answered.
 
 import { Bot, type BotConfig, type Context } from "grammy";
-import { upsertUser } from "../db/tickets.js";
-import { checkDraw, checkUpcoming, drawOptions } from "./check.js";
+import { savedTickets, saveTicket, upsertUser } from "../db/tickets.js";
+import { checkDraw, checkSaved, checkUpcoming, drawOptions } from "./check.js";
 import { decodeChoice } from "./choice.js";
 import {
   ASK_NUMBERS,
@@ -21,6 +22,8 @@ import {
   PHOTO_UNSUPPORTED,
   pickDraw,
   resultMessage,
+  savedMessage,
+  savedNote,
   STALE_BUTTON,
   WELCOME,
 } from "./reply.js";
@@ -61,9 +64,16 @@ export function createBot(
     await next();
   });
 
+  // Saved tickets, each against its own draw. No saved tickets: ask for some.
+  const retire = async (ctx: Context & { from: { id: number } }) => {
+    const saved = await savedTickets(ctx.from.id);
+    if (saved.length === 0) return html(ctx, ASK_NUMBERS);
+    return html(ctx, savedMessage(await checkSaved(saved, now())));
+  };
+
   dm.command("start", (ctx) => html(ctx, WELCOME));
-  dm.command("retire", (ctx) => html(ctx, ASK_NUMBERS));
-  dm.hears(CAN_I_RETIRE, (ctx) => html(ctx, ASK_NUMBERS));
+  dm.command("retire", retire);
+  dm.hears(CAN_I_RETIRE, retire);
 
   dm.on("message:photo", (ctx) => html(ctx, PHOTO_UNSUPPORTED));
 
@@ -89,11 +99,13 @@ export function createBot(
     if (choice.kind === "draw") {
       return html(ctx, resultMessage(await checkDraw(choice.ticket, choice.drawNo)));
     }
+    // Saved whatever the check finds: a draw whose results are not out yet
+    // is exactly what a later /retire is for.
+    const isNew = await saveTicket(ctx.from.id, choice.ticket, choice.date);
     const checked = await checkUpcoming(choice.ticket, choice.date, now());
-    return html(
-      ctx,
-      checked === "not drawn" ? notDrawnYet(choice.ticket, choice.date) : resultMessage(checked),
-    );
+    const reply =
+      checked === "not drawn" ? notDrawnYet(choice.ticket, choice.date) : resultMessage(checked);
+    return html(ctx, `${reply}\n\n${savedNote(isNew)}`);
   });
 
   return bot;
