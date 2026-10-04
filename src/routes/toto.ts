@@ -35,8 +35,8 @@ const byDrawNo = createRoute({
 });
 
 export const toto = new OpenAPIHono()
-  .openapi(latest, (c) => {
-    const draw = latestToto();
+  .openapi(latest, async (c) => {
+    const draw = await latestToto();
     if (!draw)
       return c.json(
         { error: "no TOTO draws stored — run `pnpm run scrape`" },
@@ -44,9 +44,9 @@ export const toto = new OpenAPIHono()
       );
     return c.json(draw, 200);
   })
-  .openapi(byDrawNo, (c) => {
+  .openapi(byDrawNo, async (c) => {
     const { drawNo } = c.req.valid("param");
-    const draw = totoByDrawNo(drawNo);
+    const draw = await totoByDrawNo(drawNo);
     if (!draw) return c.json({ error: `TOTO draw ${drawNo} not stored` }, 404);
     return c.json(draw, 200);
   });

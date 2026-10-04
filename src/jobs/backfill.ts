@@ -94,7 +94,7 @@ async function planGame(game: Game): Promise<DrawListEntry[]> {
     );
   }
 
-  const stored = storedDrawNos(game);
+  const stored = await storedDrawNos(game);
   const wanted = inWindow.filter((e) => !e.cancelled);
   const todo = wanted
     .filter((e) => !stored.has(e.drawNo))
@@ -134,13 +134,13 @@ function assertMatchesDrawList(
 }
 
 /** Parse and store one page. Returns false if the draw was already stored. */
-function store(
+async function store(
   game: Game,
   entry: DrawListEntry,
   html: string,
   rawPath: string,
   cascades: Set<number>,
-): boolean {
+): Promise<boolean> {
   if (game === "toto") {
     const draw = parseToto(html);
     assertMatchesDrawList(draw, entry);
@@ -151,19 +151,21 @@ function store(
       // comes from membership in the cascade list.
       cascadeDraw: cascades.has(entry.drawNo),
     };
-    return insertTotoIfAbsent(draw, meta) !== undefined;
+    return (await insertTotoIfAbsent(draw, meta)) !== undefined;
   }
 
   const draw = parse4d(html);
   assertMatchesDrawList(draw, entry);
   return (
-    insertFourdIfAbsent(draw, { rawPath, contentHash: contentHash(draw) }) !==
-    undefined
+    (await insertFourdIfAbsent(draw, {
+      rawPath,
+      contentHash: contentHash(draw),
+    })) !== undefined
   );
 }
 
 async function backfill(game: Game, todo: DrawListEntry[]): Promise<void> {
-  const runId = startRun("backfill", game);
+  const runId = await startRun("backfill", game);
   const cascades = game === "toto" ? await cascadeDrawNos() : new Set<number>();
   let fetched = 0;
   let written = 0;
@@ -176,21 +178,21 @@ async function backfill(game: Game, todo: DrawListEntry[]): Promise<void> {
       fetched++;
       const rawPath = await archive(game, entry.drawNo, html);
 
-      const wrote = store(game, entry, html, rawPath, cascades);
+      const wrote = await store(game, entry, html, rawPath, cascades);
       if (wrote) written++;
       console.log(
         `  [${i + 1}/${todo.length}] ${label} ${wrote ? "ok" : "already stored"}`,
       );
     } catch (err) {
       // 260 requests is too many to throw the whole run away over one bad
-      // page. Collect and report; the raw HTML is on disk either way.
+      // page. Collect and report; the raw HTML is archived either way.
       const message = err instanceof Error ? err.message : String(err);
       failures.push(`${label}: ${message}`);
       console.error(`  [${i + 1}/${todo.length}] ${label} FAILED — ${message}`);
     }
   }
 
-  const run = finishRun(runId, {
+  const run = await finishRun(runId, {
     status: failures.length > 0 ? "error" : "ok",
     pagesFetched: fetched,
     drawsWritten: written,

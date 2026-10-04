@@ -1,5 +1,12 @@
-import { serve } from "@hono/node-server";
+// The app. Vercel deploys this file's default export as a function; locally,
+// src/serve.ts wraps it in a Node server.
+
 import { OpenAPIHono } from "@hono/zod-openapi";
+// Vercel finds its entrypoint by looking for a file that imports `hono`
+// itself; importing it only through @hono/zod-openapi does not count. This
+// loads nothing that OpenAPIHono has not already loaded.
+import "hono";
+import { cron } from "./routes/cron.js";
 import { fourd } from "./routes/fourd.js";
 import { toto } from "./routes/toto.js";
 
@@ -18,15 +25,8 @@ export const app = new OpenAPIHono({
 
 app.route("/", toto);
 app.route("/", fourd);
+app.route("/", cron);
 
 // `app.doc()` and a docs UI land in phase 6, over these same schemas.
 
-if (process.env.NODE_ENV !== "test") {
-  const port = Number(process.env.PORT ?? 3000);
-  const server = serve({ fetch: app.fetch, port }, (info) => {
-    console.log(`listening on http://localhost:${info.port}`);
-  });
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => server.close(() => process.exit(0)));
-  }
-}
+export default app;

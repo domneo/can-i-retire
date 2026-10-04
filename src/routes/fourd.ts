@@ -34,8 +34,8 @@ const byDrawNo = createRoute({
 });
 
 export const fourd = new OpenAPIHono()
-  .openapi(latest, (c) => {
-    const draw = latestFourd();
+  .openapi(latest, async (c) => {
+    const draw = await latestFourd();
     if (!draw)
       return c.json(
         { error: "no 4D draws stored — run `pnpm run scrape`" },
@@ -43,9 +43,9 @@ export const fourd = new OpenAPIHono()
       );
     return c.json(draw, 200);
   })
-  .openapi(byDrawNo, (c) => {
+  .openapi(byDrawNo, async (c) => {
     const { drawNo } = c.req.valid("param");
-    const draw = fourdByDrawNo(drawNo);
+    const draw = await fourdByDrawNo(drawNo);
     if (!draw) return c.json({ error: `4D draw ${drawNo} not stored` }, 404);
     return c.json(draw, 200);
   });

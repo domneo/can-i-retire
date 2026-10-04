@@ -1,10 +1,8 @@
-// `pnpm run migrate`. Opening the connection is what applies migrations; this
-// only reports what that did.
+// `pnpm run migrate`. Applies pending migrations to whichever database the env
+// names: Turso when TURSO_DATABASE_URL is set, data/data.db otherwise.
 
-import { appliedMigrations } from "./client.js";
+import { db } from "./client.js";
+import { migrate } from "./migrate.js";
 
-console.log(
-  appliedMigrations.length
-    ? `applied: ${appliedMigrations.join(", ")}`
-    : "already up to date",
-);
+const applied = await migrate(db);
+console.log(applied.length ? `applied: ${applied.join(", ")}` : "already up to date");

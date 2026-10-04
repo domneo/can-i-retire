@@ -3,7 +3,8 @@
 A small API over Singapore Pools draw results. Scrapes the public results pages
 into SQLite and serves them over HTTP.
 
-**Stack:** Node.js · TypeScript · Hono · SQLite (better-sqlite3) · cheerio
+**Stack:** Node.js · TypeScript · Hono · SQLite (libSQL: Turso deployed, a local
+file otherwise) · cheerio · Vercel
 
 See [PLAN.md](PLAN.md) for the full build plan. Current state: phase 3 — TOTO
 and 4D scraped into a normalised schema, with prize groups and winning outlets,
@@ -15,6 +16,7 @@ draw-list index.
 ```sh
 pnpm install
 cp .env.example .env   # then set SGPOOLS_CONTACT
+pnpm migrate           # create the schema in data/data.db
 ```
 
 `SGPOOLS_CONTACT` is required before any scrape run — it goes into the
@@ -28,8 +30,9 @@ pnpm scrape toto   # or just one
 pnpm dev           # run the API on http://localhost:3000 (watch mode)
 ```
 
-Migrations are applied automatically when the database is opened, so there is
-no separate step before the first scrape. `pnpm migrate` reports what ran.
+Migrations are not applied on open: a serverless function opens a connection
+per cold start and does not ship `migrations/`. Run `pnpm migrate` after
+adding a migration; it applies to whichever database the env names.
 
 ### Backfill
 
@@ -117,6 +120,33 @@ curl http://localhost:3000/toto/latest
 4D numbers are strings, not integers: `0427` is a different 4D number from
 `427`, and an integer column loses the distinction.
 
+## Deployment
+
+The API runs on Vercel as one function (`src/index.ts`'s default export), in
+`iad1`, next to the Turso database (`aws-us-east-1`). A read is two database
+round trips, so the function sits by the database rather than by the results
+site. The raw-page archive is a private Vercel Blob store.
+
+A Vercel Cron calls `GET /cron/scrape` daily at 14:00 UTC (22:00 SGT, after
+every draw's results are out). On the Hobby plan the call lands anywhere in
+that hour. The route needs `Authorization: Bearer $CRON_SECRET`, which Vercel
+sends itself; without `CRON_SECRET` set, it refuses every request. Runs are
+recorded with kind `scheduled` and reported to Telegram like any other.
+
+The cron fetches the latest draw only. Vercel does not retry a failed or
+missed invocation, so a gap is closed with a backfill:
+
+```sh
+vercel env pull .env.local
+pnpm backfill -- --since 2026-09-01   # with .env.local's Turso vars exported
+```
+
+To trigger the scheduled scrape by hand:
+
+```sh
+vercel crons run /cron/scrape
+```
+
 ## Other scripts
 
 | Script           | Does                          |
@@ -125,20 +155,21 @@ curl http://localhost:3000/toto/latest
 | `pnpm start`     | Run the compiled server       |
 | `pnpm typecheck` | Type-check without emitting   |
 | `pnpm test`      | Golden-file parser tests      |
-| `pnpm migrate`   | Report which migrations ran   |
+| `pnpm migrate`   | Apply pending migrations      |
 
 ## Layout
 
 ```
-src/index.ts       OpenAPIHono app
-src/routes/        typed routes, one file per game
+src/index.ts       OpenAPIHono app; Vercel's entrypoint
+src/serve.ts       local Node server around the app
+src/routes/        typed routes, one file per game, and the cron route
 src/schema/        Zod schemas — types, validation, and phase 6's OpenAPI doc
 src/jobs/          scrape and backfill entry points
 src/notify/        Telegram transport (grammY) and the run report it sends
 src/scrape/        URL building, fetching, HTML parsing
-src/db/            SQLite client, migration runner, queries
+src/db/            libSQL client, migration runner, queries
 migrations/        numbered .sql, applied on connect
-data/              SQLite file and archived raw HTML (gitignored)
+data/              local SQLite file and raw HTML archive (gitignored)
 testdata/          saved pages used as parser fixtures
 ```
 
@@ -173,10 +204,14 @@ draw number first.
 
 ## Config
 
-| Variable             | Default        | Purpose                        |
-| -------------------- | -------------- | ------------------------------ |
-| `SGPOOLS_CONTACT`    | —              | Contact string in User-Agent   |
-| `SGPOOLS_DB`         | `data/data.db` | SQLite file location           |
-| `PORT`               | `3000`         | Server port                    |
-| `TELEGRAM_BOT_TOKEN` | —              | Unset disables scrape reports  |
-| `TELEGRAM_CHAT_ID`   | —              | Chat the reports are sent to   |
+| Variable                | Default        | Purpose                                 |
+| ----------------------- | -------------- | --------------------------------------- |
+| `SGPOOLS_CONTACT`       | —              | Contact string in User-Agent            |
+| `TURSO_DATABASE_URL`    | —              | Turso database; unset uses `SGPOOLS_DB` |
+| `TURSO_AUTH_TOKEN`      | —              | Token for `TURSO_DATABASE_URL`          |
+| `SGPOOLS_DB`            | `data/data.db` | Local SQLite file location              |
+| `BLOB_READ_WRITE_TOKEN` | —              | Archive raw pages to Blob, not `data/`  |
+| `CRON_SECRET`           | —              | Bearer token `/cron/scrape` requires    |
+| `PORT`                  | `3000`         | Server port                             |
+| `TELEGRAM_BOT_TOKEN`    | —              | Unset disables scrape reports           |
+| `TELEGRAM_CHAT_ID`      | —              | Chat the reports are sent to            |
