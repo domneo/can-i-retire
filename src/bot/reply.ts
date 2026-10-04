@@ -1,6 +1,7 @@
 // What the bot says. Pure formatting over evaluated tickets, so the copy is
 // testable without Telegram or a database. Messages are HTML parse_mode.
 
+import { InlineKeyboard } from "grammy";
 import { dollars } from "../notify/format.js";
 import { displayDate } from "../scrape/date.js";
 import type { FourDDrawResponse, TotoDrawResponse } from "../schema/draw.js";
@@ -12,22 +13,22 @@ import {
   type Outcome,
   type TotoOutcome,
 } from "./evaluate.js";
+import type { DrawOptions } from "./check.js";
+import { encodeChoice } from "./choice.js";
 import { canonical, FORMAT_RULE, type Ticket } from "./ticket.js";
 
-/** One ticket, and what checking it found. */
+/** One ticket, and what checking it against one draw found. */
 export type Checked =
   | { ticket: Ticket; draw: TotoDrawResponse | FourDDrawResponse; outcome: Outcome }
-  /** No draw of this game is stored, so there is nothing to check against. */
+  /** The draw is not stored, so there is nothing to check against. */
   | { ticket: Ticket; draw: null };
 
 const GAME_NAME: Record<Game, string> = { toto: "TOTO", "4d": "4D" };
 
 export const WELCOME =
-  "Send your 4D or TOTO numbers and I will check them against the latest draw. " +
-  "Ask <b>Can I retire?</b> or send /retire to check every ticket you have sent.\n\n" +
-  FORMAT_RULE;
+  "Send your 4D or TOTO numbers, then pick the draw to check them against.\n\n" + FORMAT_RULE;
 
-export const NO_TICKETS = `Provide draw numbers.\n\n${FORMAT_RULE}`;
+export const ASK_NUMBERS = `Provide draw numbers.\n\n${FORMAT_RULE}`;
 
 export const PHOTO_UNSUPPORTED =
   `Photo tickets are not supported yet. Type the numbers instead.\n\n${FORMAT_RULE}`;
@@ -35,6 +36,36 @@ export const PHOTO_UNSUPPORTED =
 export const ERROR = "Something went wrong on my side. Try again in a minute.";
 
 export const invalidTicket = (reason: string): string => `${reason}\n\n${FORMAT_RULE}`;
+
+// --- picking a draw --------------------------------------------------------
+
+const ticketLabel = (ticket: Ticket): string =>
+  `<b>${GAME_NAME[ticket.game]}</b> ${canonical(ticket)}`;
+
+export const pickDraw = (ticket: Ticket): string =>
+  `Check ${ticketLabel(ticket)} against which draw?`;
+
+/** The upcoming draw first, then stored draws newest first: one per row. */
+export function drawKeyboard(ticket: Ticket, options: DrawOptions): InlineKeyboard {
+  const keyboard = new InlineKeyboard()
+    .text(
+      `${displayDate(options.upcoming)} · upcoming`,
+      encodeChoice({ kind: "upcoming", date: options.upcoming, ticket }),
+    )
+    .row();
+  for (const { drawNo, drawDate } of options.past) {
+    keyboard.text(displayDate(drawDate), encodeChoice({ kind: "draw", drawNo, ticket })).row();
+  }
+  return keyboard;
+}
+
+export const notDrawnYet = (ticket: Ticket, date: string): string =>
+  `<b>You cannot retire yet.</b>\n\n` +
+  `The ${GAME_NAME[ticket.game]} draw on ${displayDate(date)} has not happened yet.\n` +
+  `• ${canonical(ticket)}`;
+
+/** A button this bot did not write, or one from before a format change. */
+export const STALE_BUTTON = `That button no longer works. Send your numbers again.`;
 
 // --- results ---------------------------------------------------------------
 
@@ -91,38 +122,22 @@ const resultLine = (c: CheckedWithDraw): string =>
   }`;
 
 /**
- * The verdict, then each game's draw with its tickets under it.
+ * The verdict, then the draw and the ticket's result under it.
  *
- * A ticket with no stored draw says so: it is never counted as a loss. That
- * is the PRD's one hard rule.
+ * A draw that is not stored says so: it is never counted as a loss. That is
+ * the PRD's one hard rule.
  */
-export function resultsMessage(checked: Checked[]): string {
-  if (checked.length === 0) return NO_TICKETS;
-
-  const won = checked.some((c) => hasDraw(c) && isWin(c.outcome));
-  const blocks: string[] = [won ? "🎉 <b>You can retire!!!</b>" : "<b>You cannot retire yet.</b>"];
-
-  for (const game of ["toto", "4d"] as const) {
-    const mine = checked.filter((c) => c.ticket.game === game);
-    if (mine.length === 0) continue;
-    // Every ticket of a game is checked against the same latest draw, so
-    // either all of them have it or none do.
-    const checkedAgainst = mine.filter(hasDraw);
-    blocks.push(
-      checkedAgainst.length > 0
-        ? [drawHeading(checkedAgainst[0]!.draw), ...checkedAgainst.map(resultLine)].join("\n")
-        : [
-            `<b>${GAME_NAME[game]}</b> · results not published yet`,
-            ...mine.map((c) => `• ${canonical(c.ticket)}`),
-          ].join("\n"),
-    );
+export function resultMessage(checked: Checked): string {
+  if (!hasDraw(checked)) {
+    return [
+      "<b>You cannot retire yet.</b>",
+      "",
+      `<b>${GAME_NAME[checked.ticket.game]}</b> · results not published yet`,
+      `• ${canonical(checked.ticket)}`,
+    ].join("\n");
   }
-  return blocks.join("\n\n");
-}
-
-/** Reply to a newly typed ticket: what was saved, then its result. */
-export function savedMessage(checked: Checked, isNew: boolean): string {
-  const name = GAME_NAME[checked.ticket.game];
-  const saved = isNew ? `Saved your ${name} ticket.` : `You already sent this ${name} ticket.`;
-  return `${saved}\n\n${resultsMessage([checked])}`;
+  const verdict = isWin(checked.outcome)
+    ? "🎉 <b>You can retire!!!</b>"
+    : "<b>You cannot retire yet.</b>";
+  return [verdict, "", drawHeading(checked.draw), resultLine(checked)].join("\n");
 }

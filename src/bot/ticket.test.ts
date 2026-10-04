@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { canonical, fromRow, parseTicket } from "./ticket.js";
+import { canonical, parseTicket } from "./ticket.js";
 
 test("four digits are a 4D ticket, leading zeros kept", () => {
   assert.deepEqual(parseTicket(" 0427 "), {
@@ -38,12 +38,11 @@ test("text that is not numbers is not a ticket", () => {
   assert.equal(parseTicket("   ").kind, "none");
 });
 
-test("canonical text round-trips through fromRow", () => {
+test("canonical text parses back to the same ticket", () => {
   for (const text of ["0427", "2 14 16 21 36 47"]) {
     const parsed = parseTicket(text);
     assert.equal(parsed.kind, "ticket");
     if (parsed.kind !== "ticket") continue;
-    const stored = canonical(parsed.ticket);
-    assert.deepEqual(fromRow(parsed.ticket.game, stored), parsed.ticket);
+    assert.deepEqual(parseTicket(canonical(parsed.ticket)), parsed);
   }
 });

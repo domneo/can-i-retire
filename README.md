@@ -137,12 +137,16 @@ curl http://localhost:3000/toto/latest
 
 The Telegram bot answers in private chats; group messages are ignored.
 
-| Message                        | Reply                                                           |
-| ------------------------------ | --------------------------------------------------------------- |
-| `/retire` or "Can I retire?"   | Your 10 newest tickets, checked against each game's latest draw |
-| `0427`                         | Saves a 4D ticket, then checks it                               |
-| `2 14 16 21 36 47` (6–12 nums) | Saves a TOTO ticket (System entries too), then checks it        |
-| Anything else                  | The number format rule                                          |
+| Message                        | Reply                                                |
+| ------------------------------ | ---------------------------------------------------- |
+| `0427`                         | 4D: asks which draw to check against                 |
+| `2 14 16 21 36 47` (6–12 nums) | TOTO, System entries too: asks which draw            |
+| `/retire` or "Can I retire?"   | Asks for numbers                                     |
+| Anything else                  | The number format rule                               |
+
+The question comes with one button per draw: the upcoming draw, then the last
+four stored draws of that game, newest first. Pressing one checks the numbers
+against that draw:
 
 ```
 🎉 <b>You can retire!!!</b>
@@ -151,25 +155,30 @@ The Telegram bot answers in private chats; group messages are ignored.
 • 2 14 16 21 36 47 — Group 1 $1,553,027
 ```
 
-A typed ticket names no draw, so it is stored unbound and always checked
-against the latest stored draw of its game. When no draw of that game is
-stored, the reply says results are not published yet; it never reports a loss
-without results to back it. TOTO amounts come from the draw's prize groups,
-and a System entry is checked as every six-number combination it covers. 4D
-checks a straight match only and quotes the Big and Small payout per $1 from
-`fourd_prize_schedule`.
+The upcoming draw is the next regular draw day (TOTO Mon and Thu, 4D Wed, Sat
+and Sun) that has no stored results. Pressing it says the draw has not happened
+yet. An old upcoming button whose draw has since been stored checks that draw;
+one whose date has passed without stored results says results are not
+published yet. The bot never reports a loss without results to back it.
+
+Nothing is stored between the question and the answer: the numbers ride in the
+button's callback data and are parsed again when it is pressed. TOTO amounts
+come from the draw's prize groups, and a System entry is checked as every
+six-number combination it covers. 4D checks a straight match only and quotes
+the Big and Small payout per $1 from `fourd_prize_schedule`.
 
 Telegram delivers updates to `POST /telegram/webhook`. The route refuses
 everything until both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` are
 set, and then accepts only requests carrying that secret. Register the webhook
-once per deployment URL:
+once per deployment URL, and again whenever the update types it asks for
+change (it now needs `callback_query` for the draw buttons):
 
 ```sh
 pnpm webhook https://<deployment-host>
 ```
 
-Not built yet: photo tickets, draw-bound tickets, pushes when results land,
-`/subscribe`, and `/suggest`.
+Not built yet: photo tickets, scraping a missing draw on demand, pushes when
+results land, `/subscribe`, and `/suggest`.
 
 ## Deployment
 

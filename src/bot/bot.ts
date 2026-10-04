@@ -1,37 +1,45 @@
-// The Telegram bot: grammY handlers over the ticket store. Runs behind the
+// The Telegram bot: grammY handlers over the stored draws. Runs behind the
 // webhook in src/routes/telegram.ts; nothing here polls.
+//
+// A check is two steps. Numbers in, and the bot offers the upcoming draw and
+// the last few stored ones as buttons. A button press checks the numbers
+// against that one draw.
 //
 // Private chats only (PRD: group chats are out of scope for v1). Anything
 // from a group is ignored rather than answered.
 
 import { Bot, type BotConfig, type Context } from "grammy";
-import { addTicket, ticketsFor, upsertUser } from "../db/tickets.js";
-import { checkTickets } from "./check.js";
+import { upsertUser } from "../db/tickets.js";
+import { checkDraw, checkUpcoming, drawOptions } from "./check.js";
+import { decodeChoice } from "./choice.js";
 import {
+  ASK_NUMBERS,
+  drawKeyboard,
   ERROR,
   invalidTicket,
-  NO_TICKETS,
+  notDrawnYet,
   PHOTO_UNSUPPORTED,
-  resultsMessage,
-  savedMessage,
+  pickDraw,
+  resultMessage,
+  STALE_BUTTON,
   WELCOME,
 } from "./reply.js";
-import { canonical, fromRow, parseTicket } from "./ticket.js";
+import { parseTicket } from "./ticket.js";
 
 /** "Can I retire?" in any case, with or without the question mark. */
 const CAN_I_RETIRE = /^\s*can\s+i\s+retire\s*[?!.]*\s*$/i;
 
 const html = (ctx: Context, text: string) => ctx.reply(text, { parse_mode: "HTML" });
 
-async function retire(ctx: Context & { from: { id: number } }) {
-  const rows = await ticketsFor(ctx.from.id);
-  if (rows.length === 0) return html(ctx, NO_TICKETS);
-  const checked = await checkTickets(rows.map((r) => fromRow(r.game, r.numbers)));
-  return html(ctx, resultsMessage(checked));
-}
-
-/** `config` is for tests, which pass `botInfo` to skip the getMe call. */
-export function createBot(token: string, config?: BotConfig<Context>): Bot {
+/**
+ * `config` is for tests, which pass `botInfo` to skip the getMe call.
+ * `now` is for tests too: it decides which draw is upcoming.
+ */
+export function createBot(
+  token: string,
+  config?: BotConfig<Context>,
+  now: () => Date = () => new Date(),
+): Bot {
   const bot = new Bot(token, config);
   const dm = bot.chatType("private");
 
@@ -46,28 +54,46 @@ export function createBot(token: string, config?: BotConfig<Context>): Bot {
     }
   });
 
-  // Every private message registers its sender, so the user row exists
-  // before anything tries to store a ticket against it.
+  // Every private update registers its sender, so a later push has a chat to
+  // address.
   dm.use(async (ctx, next) => {
     await upsertUser(ctx.from.id, ctx.chat.id);
     await next();
   });
 
   dm.command("start", (ctx) => html(ctx, WELCOME));
-  dm.command("retire", retire);
-  dm.hears(CAN_I_RETIRE, retire);
+  dm.command("retire", (ctx) => html(ctx, ASK_NUMBERS));
+  dm.hears(CAN_I_RETIRE, (ctx) => html(ctx, ASK_NUMBERS));
 
   dm.on("message:photo", (ctx) => html(ctx, PHOTO_UNSUPPORTED));
 
   dm.on("message:text", async (ctx) => {
     const parsed = parseTicket(ctx.message.text);
-    if (parsed.kind === "none") return html(ctx, NO_TICKETS);
+    if (parsed.kind === "none") return html(ctx, ASK_NUMBERS);
     if (parsed.kind === "invalid") return html(ctx, invalidTicket(parsed.reason));
 
     const { ticket } = parsed;
-    const isNew = await addTicket(ctx.from.id, ticket.game, canonical(ticket));
-    const [checked] = await checkTickets([ticket]);
-    return html(ctx, savedMessage(checked!, isNew));
+    const options = await drawOptions(ticket.game, now());
+    return ctx.reply(pickDraw(ticket), {
+      parse_mode: "HTML",
+      reply_markup: drawKeyboard(ticket, options),
+    });
+  });
+
+  // The keyboard stays on its message, so another draw can be picked for the
+  // same numbers without typing them again.
+  dm.on("callback_query:data", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const choice = decodeChoice(ctx.callbackQuery.data);
+    if (!choice) return html(ctx, STALE_BUTTON);
+    if (choice.kind === "draw") {
+      return html(ctx, resultMessage(await checkDraw(choice.ticket, choice.drawNo)));
+    }
+    const checked = await checkUpcoming(choice.ticket, choice.date, now());
+    return html(
+      ctx,
+      checked === "not drawn" ? notDrawnYet(choice.ticket, choice.date) : resultMessage(checked),
+    );
   });
 
   return bot;

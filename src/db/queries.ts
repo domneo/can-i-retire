@@ -377,6 +377,31 @@ async function hydrateFourd(row: DrawRow): Promise<FourDDrawResponse> {
   };
 }
 
+/** The newest `limit` stored draws of a game, newest first. */
+export async function recentDraws(
+  game: Game,
+  limit: number,
+): Promise<{ drawNo: number; drawDate: string }[]> {
+  const rs = await db.execute({
+    sql: `SELECT draw_no, draw_date FROM draws
+          WHERE game = ? ORDER BY draw_no DESC LIMIT ?`,
+    args: [game, limit],
+  });
+  return rows<{ draw_no: number; draw_date: string }>(rs).map((r) => ({
+    drawNo: r.draw_no,
+    drawDate: r.draw_date,
+  }));
+}
+
+/** The stored draw of a game on `drawDate`, if any. */
+export async function drawNoOn(game: Game, drawDate: string): Promise<number | undefined> {
+  const rs = await db.execute({
+    sql: `SELECT MAX(draw_no) AS draw_no FROM draws WHERE game = ? AND draw_date = ?`,
+    args: [game, drawDate],
+  });
+  return rows<{ draw_no: number | null }>(rs)[0]?.draw_no ?? undefined;
+}
+
 export async function latestToto(): Promise<TotoDrawResponse | undefined> {
   const row = await latestRow("toto");
   return row && hydrateToto(row);

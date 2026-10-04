@@ -1,6 +1,7 @@
 // `pnpm webhook <base-url>`. Points the bot at a deployment's webhook route,
-// with the secret that route checks. Run once per URL change, not per deploy:
-// Telegram keeps the registration.
+// with the secret that route checks. Run once per URL change, and again when
+// allowed_updates below changes; not per deploy: Telegram keeps the
+// registration.
 //
 //   pnpm webhook https://can-i-retire.vercel.app
 
@@ -24,7 +25,7 @@ const api = new Api(token);
 await api.setWebhook(url, {
   secret_token: secret,
   // Only what the bot handles; the rest would be ignored after a round trip.
-  allowed_updates: ["message"],
+  allowed_updates: ["message", "callback_query"],
 });
 const info = await api.getWebhookInfo();
 console.log(`webhook set: ${info.url} (${info.pending_update_count} pending)`);

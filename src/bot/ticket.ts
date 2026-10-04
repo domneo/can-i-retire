@@ -4,8 +4,6 @@
 // Anything ambiguous is rejected with the format rule, never guessed: a
 // guessed ticket that "lost" is the one answer a user will not forgive.
 
-import type { Game } from "../scrape/url.js";
-
 export type Ticket =
   | { game: "toto"; numbers: number[] }
   | { game: "4d"; number: string };
@@ -63,14 +61,7 @@ export function parseTicket(text: string): ParseResult {
   };
 }
 
-/** The `tickets.numbers` text for a ticket. */
+/** A ticket as text: the inverse of parseTicket. */
 export function canonical(ticket: Ticket): string {
   return ticket.game === "toto" ? ticket.numbers.join(" ") : ticket.number;
-}
-
-/** The inverse of `canonical`, for a row read back from `tickets`. */
-export function fromRow(game: Game, numbers: string): Ticket {
-  return game === "toto"
-    ? { game, numbers: numbers.split(" ").map(Number) }
-    : { game, number: numbers };
 }
