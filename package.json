@@ -9,7 +9,6 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "scrape": "tsx --env-file-if-exists=.env.local src/jobs/scrape.ts",
-    "spike": "tsx scratch/spike.ts",
     "migrate": "tsx --env-file-if-exists=.env.local src/db/migrate-cli.ts",
     "backfill": "tsx --env-file-if-exists=.env.local src/jobs/backfill.ts",
     "test": "tsx --test \"src/**/*.test.ts\""
