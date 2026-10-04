@@ -5,3 +5,9 @@ dist/
 .vercel
 .env*
 !.env.example
+
+# Agent skills, installed locally (see skills-lock.json for the source)
+.agents/
+.claude/skills
+skills-lock.json
+.claude/settings.local.json
