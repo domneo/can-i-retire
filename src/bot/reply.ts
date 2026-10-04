@@ -39,8 +39,11 @@ export const invalidTicket = (reason: string): string => `${reason}\n\n${FORMAT_
 
 // --- picking a draw --------------------------------------------------------
 
+/** Fixed-width, and one tap copies it. Digits only, so nothing to escape. */
+const ticketCode = (ticket: Ticket): string => `<code>${canonical(ticket)}</code>`;
+
 const ticketLabel = (ticket: Ticket): string =>
-  `<b>${GAME_NAME[ticket.game]}</b> ${canonical(ticket)}`;
+  `<b>${GAME_NAME[ticket.game]}</b> ${ticketCode(ticket)}`;
 
 export const pickDraw = (ticket: Ticket): string =>
   `Check ${ticketLabel(ticket)} against which draw?`;
@@ -62,7 +65,7 @@ export function drawKeyboard(ticket: Ticket, options: DrawOptions): InlineKeyboa
 export const notDrawnYet = (ticket: Ticket, date: string): string =>
   `<b>You cannot retire yet.</b>\n\n` +
   `The ${GAME_NAME[ticket.game]} draw on ${displayDate(date)} has not happened yet.\n` +
-  `• ${canonical(ticket)}`;
+  `• ${ticketCode(ticket)}`;
 
 /** Added under any reply to an "upcoming" press: the ticket is now saved. */
 export const savedNote = (isNew: boolean): string =>
@@ -74,11 +77,24 @@ export const STALE_BUTTON = `That button no longer works. Send your numbers agai
 
 // --- results ---------------------------------------------------------------
 
-function drawHeading(draw: TotoDrawResponse | FourDDrawResponse): string {
+/** Every number the tickets hold: TOTO numbers, or 4D numbers as text. */
+const held = (tickets: Ticket[]): Set<number | string> =>
+  new Set(
+    tickets.flatMap((t): (number | string)[] => (t.game === "toto" ? t.numbers : [t.number])),
+  );
+
+/** Bold when a ticket holds it, so a match shows without comparing by eye. */
+const mark = (holds: Set<number | string>, value: number | string): string =>
+  holds.has(value) ? `<b>${value}</b>` : String(value);
+
+function drawHeading(draw: TotoDrawResponse | FourDDrawResponse, tickets: Ticket[]): string {
+  const holds = held(tickets);
   const head = `<b>${GAME_NAME[draw.game]} ${draw.drawNo}</b> · ${displayDate(draw.drawDate)}`;
   return draw.game === "toto"
-    ? `${head} · ${draw.numbers.join(" ")} (+${draw.additional})`
-    : `${head} · 1st ${draw.first} · 2nd ${draw.second} · 3rd ${draw.third}`;
+    ? `${head} · ${draw.numbers.map((n) => mark(holds, n)).join(" ")}` +
+        ` (+${mark(holds, draw.additional)})`
+    : `${head} · 1st ${mark(holds, draw.first)} · 2nd ${mark(holds, draw.second)}` +
+        ` · 3rd ${mark(holds, draw.third)}`;
 }
 
 function totoResult(o: TotoOutcome): string {
@@ -122,7 +138,7 @@ type CheckedWithDraw = Extract<Checked, { draw: object }>;
 const hasDraw = (c: Checked): c is CheckedWithDraw => c.draw !== null;
 
 const resultLine = (c: CheckedWithDraw): string =>
-  `• ${canonical(c.ticket)} — ${
+  `• ${ticketCode(c.ticket)} — ${
     c.outcome.game === "toto" ? totoResult(c.outcome) : fourdResult(c.outcome)
   }`;
 
@@ -138,13 +154,15 @@ export function resultMessage(checked: Checked): string {
       "<b>You cannot retire yet.</b>",
       "",
       `<b>${GAME_NAME[checked.ticket.game]}</b> · results not published yet`,
-      `• ${canonical(checked.ticket)}`,
+      `• ${ticketCode(checked.ticket)}`,
     ].join("\n");
   }
   const verdict = isWin(checked.outcome)
     ? "🎉 <b>You can retire!!!</b>"
     : "<b>You cannot retire yet.</b>";
-  return [verdict, "", drawHeading(checked.draw), resultLine(checked)].join("\n");
+  return [verdict, "", drawHeading(checked.draw, [checked.ticket]), resultLine(checked)].join(
+    "\n",
+  );
 }
 
 // --- saved tickets ---------------------------------------------------------
@@ -152,12 +170,15 @@ export function resultMessage(checked: Checked): string {
 function savedDrawBlock(d: SavedDraw): string {
   const first = d.checked[0]!;
   if (first.draw) {
-    return [drawHeading(first.draw), ...d.checked.filter(hasDraw).map(resultLine)].join("\n");
+    const tickets = d.checked.map((c) => c.ticket);
+    return [drawHeading(first.draw, tickets), ...d.checked.filter(hasDraw).map(resultLine)].join(
+      "\n",
+    );
   }
   const status = d.notDrawn ? "draw has not happened yet" : "results not published yet";
   return [
     `<b>${GAME_NAME[d.game]}</b> · ${displayDate(d.date)} · ${status}`,
-    ...d.checked.map((c) => `• ${canonical(c.ticket)}`),
+    ...d.checked.map((c) => `• ${ticketCode(c.ticket)}`),
   ].join("\n");
 }
 

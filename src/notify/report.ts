@@ -56,6 +56,9 @@ export function formatRun(run: RunRow, draws: string[] = []): string {
   return lines.join("\n");
 }
 
-/** Report a finished run. Never throws, and does nothing without a token. */
+/**
+ * Report a finished run. Never throws, and does nothing without a token.
+ * Only a failure makes a sound: a routine success should not wake anyone.
+ */
 export const reportRun = (run: RunRow, draws: string[] = []): Promise<boolean> =>
-  sendTelegram(formatRun(run, draws));
+  sendTelegram(formatRun(run, draws), { silent: run.status === "ok" });

@@ -40,9 +40,13 @@ export const telegramConfigured = (): boolean =>
 
 /**
  * Send one message. Returns false when it did not arrive — including the
- * unconfigured case, where no request is made at all.
+ * unconfigured case, where no request is made at all. A `silent` message
+ * arrives without a sound or vibration.
  */
-export async function sendTelegram(text: string): Promise<boolean> {
+export async function sendTelegram(
+  text: string,
+  { silent = false }: { silent?: boolean } = {},
+): Promise<boolean> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   // No token, no send: the job runs exactly as it did before.
@@ -50,7 +54,10 @@ export async function sendTelegram(text: string): Promise<boolean> {
 
   try {
     const api = new Api(token, { timeoutSeconds: TIMEOUT_SECONDS });
-    await api.sendMessage(chatId, truncate(text), { parse_mode: "HTML" });
+    await api.sendMessage(chatId, truncate(text), {
+      parse_mode: "HTML",
+      disable_notification: silent,
+    });
     return true;
   } catch (err) {
     // GrammyError covers the API saying no (bad chat id, malformed entities);
