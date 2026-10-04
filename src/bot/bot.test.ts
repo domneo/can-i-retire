@@ -119,7 +119,7 @@ const writeFourdOn = (drawNo: number, drawDate: string) =>
     meta,
   );
 
-test("/retire and 'Can I retire?' ask for numbers", async () => {
+test("/retire and 'Can I retire?' ask for numbers when nothing is saved", async () => {
   for (const text of ["/retire", "Can I retire?", "can i retire"]) {
     const [reply] = await say(text);
     assert.match(reply!.text, /^Provide draw numbers\./, text);
@@ -179,8 +179,13 @@ test("the upcoming draw has not happened yet", async () => {
       "",
       "The 4D draw on Sun 4 Oct 2026 has not happened yet.",
       "• 0427",
+      "",
+      "Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.",
     ].join("\n"),
   );
+
+  const [again] = await press("u:2026-10-04:0427");
+  assert.match(again!.text, /This ticket is already saved\./);
 });
 
 test("an old upcoming button checks the draw once it is stored", async () => {
@@ -205,6 +210,8 @@ test("an old upcoming button checks the draw once it is stored", async () => {
       "",
       "<b>TOTO 4217</b> · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)",
       "• 2 14 16 21 36 47 — Group 1 $1,553,027",
+      "",
+      "Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.",
     ].join("\n"),
   );
 });
@@ -213,6 +220,63 @@ test("a past date without results is never called a loss or 'not happened'", asy
   const [reply] = await press("u:2026-09-17:2 14 16 21 36 47");
   assert.match(reply!.text, /results not published yet/);
   assert.doesNotMatch(reply!.text, /no prize|not happened/);
+});
+
+test("/retire checks each saved ticket against the draw it was saved for", async () => {
+  const userId = 7;
+  await press("u:2026-10-04:0427", userId);
+  await press("u:2026-10-04:1234", userId);
+  await press("u:2026-10-05:2 14 16 21 36 47", userId);
+  await press("u:2026-09-17:2 14 16 21 36 47", userId);
+  // A past draw is not saved: only an upcoming pick is.
+  await press("d:5534:0427", userId);
+
+  const [before] = await say("/retire", userId);
+  assert.equal(
+    before!.text,
+    [
+      "<b>You cannot retire yet.</b>",
+      "",
+      "<b>TOTO</b> · Mon 5 Oct 2026 · draw has not happened yet",
+      "• 2 14 16 21 36 47",
+      "",
+      "<b>4D</b> · Sun 4 Oct 2026 · draw has not happened yet",
+      "• 0427",
+      "• 1234",
+      "",
+      "<b>TOTO</b> · Thu 17 Sep 2026 · results not published yet",
+      "• 2 14 16 21 36 47",
+      "",
+      "Send numbers to add another ticket.",
+    ].join("\n"),
+  );
+
+  // The 4D draw lands; the next ask checks both tickets against it.
+  await writeFourdOn(5536, "2026-10-04");
+  const [after] = await say("Can I retire?", userId);
+  assert.equal(
+    after!.text,
+    [
+      "🎉 <b>You can retire!!!</b>",
+      "",
+      "<b>TOTO</b> · Mon 5 Oct 2026 · draw has not happened yet",
+      "• 2 14 16 21 36 47",
+      "",
+      "<b>4D 5536</b> · Sun 4 Oct 2026 · 1st 8608 · 2nd 4918 · 3rd 9832",
+      "• 0427 — Starter prize: $250 Big, Small pays nothing, per $1",
+      "• 1234 — no prize",
+      "",
+      "<b>TOTO</b> · Thu 17 Sep 2026 · results not published yet",
+      "• 2 14 16 21 36 47",
+      "",
+      "Send numbers to add another ticket.",
+    ].join("\n"),
+  );
+});
+
+test("saved tickets are private to the user who saved them", async () => {
+  const [reply] = await say("/retire", 8);
+  assert.match(reply!.text, /^Provide draw numbers\./);
 });
 
 test("a draw number that is not stored is never called a loss", async () => {

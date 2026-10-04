@@ -13,7 +13,7 @@ import {
   type Outcome,
   type TotoOutcome,
 } from "./evaluate.js";
-import type { DrawOptions } from "./check.js";
+import type { DrawOptions, SavedDraw } from "./check.js";
 import { encodeChoice } from "./choice.js";
 import { canonical, FORMAT_RULE, type Ticket } from "./ticket.js";
 
@@ -63,6 +63,11 @@ export const notDrawnYet = (ticket: Ticket, date: string): string =>
   `<b>You cannot retire yet.</b>\n\n` +
   `The ${GAME_NAME[ticket.game]} draw on ${displayDate(date)} has not happened yet.\n` +
   `• ${canonical(ticket)}`;
+
+/** Added under any reply to an "upcoming" press: the ticket is now saved. */
+export const savedNote = (isNew: boolean): string =>
+  (isNew ? "Ticket saved." : "This ticket is already saved.") +
+  " Send /retire or “Can I retire?” to check your saved tickets.";
 
 /** A button this bot did not write, or one from before a format change. */
 export const STALE_BUTTON = `That button no longer works. Send your numbers again.`;
@@ -140,4 +145,31 @@ export function resultMessage(checked: Checked): string {
     ? "🎉 <b>You can retire!!!</b>"
     : "<b>You cannot retire yet.</b>";
   return [verdict, "", drawHeading(checked.draw), resultLine(checked)].join("\n");
+}
+
+// --- saved tickets ---------------------------------------------------------
+
+function savedDrawBlock(d: SavedDraw): string {
+  const first = d.checked[0]!;
+  if (first.draw) {
+    return [drawHeading(first.draw), ...d.checked.filter(hasDraw).map(resultLine)].join("\n");
+  }
+  const status = d.notDrawn ? "draw has not happened yet" : "results not published yet";
+  return [
+    `<b>${GAME_NAME[d.game]}</b> · ${displayDate(d.date)} · ${status}`,
+    ...d.checked.map((c) => `• ${canonical(c.ticket)}`),
+  ].join("\n");
+}
+
+/**
+ * The /retire answer: one verdict over every saved ticket, then each draw
+ * with its tickets under it. Any win is a win; a draw without stored results
+ * is never counted as a loss.
+ */
+export function savedMessage(draws: SavedDraw[]): string {
+  const won = draws.some((d) => d.checked.some((c) => hasDraw(c) && isWin(c.outcome)));
+  const verdict = won ? "🎉 <b>You can retire!!!</b>" : "<b>You cannot retire yet.</b>";
+  return [verdict, ...draws.map(savedDrawBlock), "Send numbers to add another ticket."].join(
+    "\n\n",
+  );
 }

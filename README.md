@@ -141,7 +141,7 @@ The Telegram bot answers in private chats; group messages are ignored.
 | ------------------------------ | ---------------------------------------------------- |
 | `0427`                         | 4D: asks which draw to check against                 |
 | `2 14 16 21 36 47` (6–12 nums) | TOTO, System entries too: asks which draw            |
-| `/retire` or "Can I retire?"   | Asks for numbers                                     |
+| `/retire` or "Can I retire?"   | Checks saved tickets; asks for numbers if none       |
 | Anything else                  | The number format rule                               |
 
 The question comes with one button per draw: the upcoming draw, then the last
@@ -161,8 +161,24 @@ yet. An old upcoming button whose draw has since been stored checks that draw;
 one whose date has passed without stored results says results are not
 published yet. The bot never reports a loss without results to back it.
 
-Nothing is stored between the question and the answer: the numbers ride in the
-button's callback data and are parsed again when it is pressed. TOTO amounts
+Pressing the upcoming draw also saves the ticket for that draw date. After
+that, `/retire` or "Can I retire?" checks each saved ticket against the draw it
+was saved for, up to the ten newest, grouped by draw:
+
+```
+🎉 <b>You can retire!!!</b>
+
+<b>TOTO</b> · Mon 5 Oct 2026 · draw has not happened yet
+• 2 14 16 21 36 47
+
+<b>4D 5536</b> · Sun 4 Oct 2026 · 1st 8608 · 2nd 4918 · 3rd 9832
+• 0427 — Starter prize: $250 Big, Small pays nothing, per $1
+```
+
+A saved ticket is bound by date, not draw number: the draw has no number until
+its results are scraped, so each check looks the draw up by game and date.
+Picking a past draw checks the numbers once and saves nothing. The numbers ride
+in the button's callback data and are parsed again when it is pressed. TOTO amounts
 come from the draw's prize groups, and a System entry is checked as every
 six-number combination it covers. 4D checks a straight match only and quotes
 the Big and Small payout per $1 from `fourd_prize_schedule`.
