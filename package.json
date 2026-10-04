@@ -4,14 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --env-file-if-exists=.env src/serve.ts",
-    "start": "node --env-file-if-exists=.env dist/serve.js",
+    "dev": "tsx watch --env-file-if-exists=.env.local src/serve.ts",
+    "start": "node --env-file-if-exists=.env.local dist/serve.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "scrape": "tsx --env-file-if-exists=.env src/jobs/scrape.ts",
+    "scrape": "tsx --env-file-if-exists=.env.local src/jobs/scrape.ts",
     "spike": "tsx scratch/spike.ts",
-    "migrate": "tsx --env-file-if-exists=.env src/db/migrate-cli.ts",
-    "backfill": "tsx --env-file-if-exists=.env src/jobs/backfill.ts",
+    "migrate": "tsx --env-file-if-exists=.env.local src/db/migrate-cli.ts",
+    "backfill": "tsx --env-file-if-exists=.env.local src/jobs/backfill.ts",
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "devDependencies": {

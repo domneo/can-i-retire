@@ -15,8 +15,21 @@ draw-list index.
 
 ```sh
 pnpm install
-cp .env.example .env   # then set SGPOOLS_CONTACT
-pnpm migrate           # create the schema in data/data.db
+vercel link                  # once, to the can-i-retire project
+vercel env pull .env.local   # every variable, from Vercel's Development env
+```
+
+`.env.local` is the only env file the scripts read. Vercel's Development
+environment is its source, so change a value there and pull again rather
+than editing the file: the next pull overwrites it.
+
+That file points the scripts at the production Turso database and Blob store,
+and at the Telegram chat. To work against a local SQLite file instead, start
+from `.env.example`:
+
+```sh
+cp .env.example .env.local   # then set SGPOOLS_CONTACT
+pnpm migrate                 # create the schema in data/data.db
 ```
 
 `SGPOOLS_CONTACT` is required before any scrape run — it goes into the
@@ -137,8 +150,7 @@ The cron fetches the latest draw only. Vercel does not retry a failed or
 missed invocation, so a gap is closed with a backfill:
 
 ```sh
-vercel env pull .env.local
-pnpm backfill -- --since 2026-09-01   # with .env.local's Turso vars exported
+pnpm backfill -- --since 2026-09-01
 ```
 
 To trigger the scheduled scrape by hand:
