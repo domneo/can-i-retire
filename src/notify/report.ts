@@ -24,9 +24,9 @@ function duration(seconds: number | null): string {
 
 /**
  * Build the message for a finished run, as rich HTML: the counts are a table.
- * `draws` are pre-formatted one-liners from ./format.js — a per-draw run
- * passes what it wrote, a backfill passes nothing rather than three hundred
- * lines.
+ * `draws` are rich HTML tables from ./format.js, one line each — a per-draw
+ * run passes what it wrote, a backfill passes nothing rather than three
+ * hundred tables.
  *
  * One block per line, so ./telegram.js can cut an over-long message at a
  * newline without leaving a tag open.
@@ -49,7 +49,7 @@ export function formatRun(run: RunRow, draws: string[] = []): string {
     `<table bordered compact>${counts
       .map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`)
       .join("")}</table>`,
-    ...draws.map((d) => `<p>${escapeHtml(d)}</p>`),
+    ...draws,
     ...failures
       .slice(0, MAX_FAILURE_LINES)
       .map((f) => `<p><code>${escapeHtml(f)}</code></p>`),

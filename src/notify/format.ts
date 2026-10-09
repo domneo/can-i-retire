@@ -1,4 +1,4 @@
-// Human-readable one-liners for a draw. Pure formatting, no I/O, so the shape
+// Telegram-ready summaries of a draw. Pure formatting, no I/O, so the shape
 // of a report message is testable without a network or a database.
 
 import { displayDate } from "../scrape/date.js";
@@ -16,34 +16,45 @@ export function dollars(cents: number | null): string {
   return frac === 0 ? `$${body}` : `$${body}.${String(frac).padStart(2, "0")}`;
 }
 
+/** One label-and-value table, on one line so a cut at a newline never splits it. */
+function drawTable(caption: string, rows: [string, string][]): string {
+  return (
+    `<table bordered compact><caption>${caption}</caption>` +
+    rows.map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`).join("") +
+    "</table>"
+  );
+}
+
+const caption = (game: string, drawNo: number, date: string): string =>
+  `<b>${game} Draw #${drawNo}</b> · ${displayDate(date)}`;
+
 /**
- * `TOTO Draw #4217 · Mon 14 Sep 2026 · 6 7 8 16 18 35 (+31) · Group 1 $3,106,055`
+ * A TOTO draw as a rich HTML table: winning numbers, additional number,
+ * Group 1 prize, and any flags. Everything is digits, dates or fixed copy, so
+ * nothing needs escaping.
  *
  * `cascadeDraw` is not on the draw: nothing in the results markup says so, it
  * comes from the cascade draw list alongside it.
  */
-export function totoLine(draw: TotoDraw, cascadeDraw = false): string {
+export function totoTable(draw: TotoDraw, cascadeDraw = false): string {
   const flags = [
-    draw.snowballed ? "snowballed" : null,
-    cascadeDraw ? "cascade" : null,
+    draw.snowballed ? "Snowballed" : null,
+    cascadeDraw ? "Cascade" : null,
   ].filter((f) => f !== null);
 
-  return [
-    `TOTO Draw #${draw.drawNo}`,
-    displayDate(draw.drawDate),
-    `${draw.numbers.join(" ")} (+${draw.additional})`,
-    `Group 1 ${dollars(draw.group1PrizeCents)}`,
-    ...(flags.length > 0 ? [`[${flags.join(", ")}]`] : []),
-  ].join(" · ");
+  return drawTable(caption("TOTO", draw.drawNo, draw.drawDate), [
+    ["Winning", `<code>${draw.numbers.join(" ")}</code>`],
+    ["Additional", `<code>${draw.additional}</code>`],
+    ["Group 1", dollars(draw.group1PrizeCents)],
+    ...(flags.length > 0 ? [["Notes", flags.join(", ")] as [string, string]] : []),
+  ]);
 }
 
-/** `4D Draw #5536 · Sat 19 Sep 2026 · 1st 1234 · 2nd 5678 · 3rd 9012` */
-export function fourdLine(draw: FourDDraw): string {
-  return [
-    `4D Draw #${draw.drawNo}`,
-    displayDate(draw.drawDate),
-    `1st ${draw.first}`,
-    `2nd ${draw.second}`,
-    `3rd ${draw.third}`,
-  ].join(" · ");
+/** A 4D draw as a rich HTML table of its top three. */
+export function fourdTable(draw: FourDDraw): string {
+  return drawTable(caption("4D", draw.drawNo, draw.drawDate), [
+    ["1st", `<code>${draw.first}</code>`],
+    ["2nd", `<code>${draw.second}</code>`],
+    ["3rd", `<code>${draw.third}</code>`],
+  ]);
 }

@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { dollars, fourdLine, totoLine } from "./format.js";
+import { dollars, fourdTable, totoTable } from "./format.js";
 import type { TotoDraw } from "../scrape/parse-toto.js";
 import type { FourDDraw } from "../scrape/parse-4d.js";
 
@@ -32,23 +32,29 @@ test("formats cents as dollars, with cents only when there are any", () => {
   assert.equal(dollars(null), "-");
 });
 
-test("summarises a TOTO draw", () => {
+test("tabulates a TOTO draw", () => {
   assert.equal(
-    totoLine(TOTO),
-    "TOTO Draw #4217 · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1) · Group 1 $5,853,782",
+    totoTable(TOTO),
+    "<table bordered compact><caption><b>TOTO Draw #4217</b> · Mon 14 Sep 2026</caption>" +
+      "<tr><th>Winning</th><td><code>2 14 16 21 36 47</code></td></tr>" +
+      "<tr><th>Additional</th><td><code>1</code></td></tr>" +
+      "<tr><th>Group 1</th><td>$5,853,782</td></tr></table>",
   );
 });
 
 test("flags snowballed and cascade draws", () => {
-  assert.equal(
-    totoLine({ ...TOTO, snowballed: true }, true).split(" · ").at(-1),
-    "[snowballed, cascade]",
+  assert.match(
+    totoTable({ ...TOTO, snowballed: true }, true),
+    /<tr><th>Notes<\/th><td>Snowballed, Cascade<\/td><\/tr><\/table>$/,
   );
 });
 
-test("summarises a 4D draw as its top three", () => {
+test("tabulates a 4D draw as its top three", () => {
   assert.equal(
-    fourdLine(FOURD),
-    "4D Draw #5536 · Sat 19 Sep 2026 · 1st 0427 · 2nd 5678 · 3rd 9012",
+    fourdTable(FOURD),
+    "<table bordered compact><caption><b>4D Draw #5536</b> · Sat 19 Sep 2026</caption>" +
+      "<tr><th>1st</th><td><code>0427</code></td></tr>" +
+      "<tr><th>2nd</th><td><code>5678</code></td></tr>" +
+      "<tr><th>3rd</th><td><code>9012</code></td></tr></table>",
   );
 });
