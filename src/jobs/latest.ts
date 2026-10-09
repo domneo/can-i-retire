@@ -23,7 +23,7 @@ import {
   type RunRow,
   type WriteMeta,
 } from "../db/queries.js";
-import { fourdLine, totoLine } from "../notify/format.js";
+import { fourdTable, totoTable } from "../notify/format.js";
 import { reportRun } from "../notify/report.js";
 
 /** A fetch that keeps the run's page count. */
@@ -92,7 +92,7 @@ export async function scrapeLatest(game: Game, kind: string): Promise<RunRow> {
       };
       await writeToto(draw, meta);
       written++;
-      draws.push(totoLine(draw, meta.cascadeDraw));
+      draws.push(totoTable(draw, meta.cascadeDraw));
       console.log(
         `toto ${draw.drawNo} (${draw.drawDate}): ${draw.numbers.join(" ")} + ` +
           `${draw.additional}${draw.snowballed ? " [snowballed]" : ""}` +
@@ -103,7 +103,7 @@ export async function scrapeLatest(game: Game, kind: string): Promise<RunRow> {
       assertDrawNoMatches(draw, drawNo, game);
       await writeFourd(draw, { rawPath, contentHash: contentHash(draw) });
       written++;
-      draws.push(fourdLine(draw));
+      draws.push(fourdTable(draw));
       console.log(
         `4d   ${draw.drawNo} (${draw.drawDate}): ${draw.first} ${draw.second} ` +
           `${draw.third}  +${draw.starter.length} starter +${draw.consolation.length} ` +

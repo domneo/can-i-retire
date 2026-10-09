@@ -17,14 +17,14 @@ const OK: RunRow = {
 
 test("a successful run reports counts and the draw", () => {
   assert.equal(
-    formatRun(OK, ["TOTO 4217 · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)"]),
+    formatRun(OK, ["<table bordered compact>…draw…</table>"]),
     [
       "<p>✅ <b>TOTO manual — ok</b></p>",
       "<table bordered compact>" +
         "<tr><th>Draws written</th><td>1</td></tr>" +
         "<tr><th>Pages</th><td>3</td></tr>" +
         "<tr><th>Time</th><td>7s</td></tr></table>",
-      "<p>TOTO 4217 · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)</p>",
+      "<table bordered compact>…draw…</table>",
     ].join("\n"),
   );
 });
