@@ -14,9 +14,6 @@ const GAME_LABEL: Record<Game, string> = { toto: "TOTO", "4d": "4D" };
 /** Enough to diagnose; the rest is in `scrape_runs.error` and the logs. */
 const MAX_FAILURE_LINES = 10;
 
-const plural = (n: number, one: string): string =>
-  `${n} ${n === 1 ? one : `${one}s`}`;
-
 function duration(seconds: number | null): string {
   if (seconds === null) return "unfinished";
   if (seconds < 60) return `${seconds}s`;
@@ -26,32 +23,40 @@ function duration(seconds: number | null): string {
 }
 
 /**
- * Build the message for a finished run. `draws` are pre-formatted one-liners
- * from ./format.js — a per-draw run passes what it wrote, a backfill passes
- * nothing rather than three hundred lines.
+ * Build the message for a finished run, as rich HTML: the counts are a table.
+ * `draws` are pre-formatted one-liners from ./format.js — a per-draw run
+ * passes what it wrote, a backfill passes nothing rather than three hundred
+ * lines.
+ *
+ * One block per line, so ./telegram.js can cut an over-long message at a
+ * newline without leaving a tag open.
  */
 export function formatRun(run: RunRow, draws: string[] = []): string {
   const ok = run.status === "ok";
   // The row stores the failures the job collected, one per line.
   const failures = run.error ? run.error.split("\n") : [];
 
+  const counts: [string, string][] = [
+    ["Draws written", String(run.draws_written)],
+    ["Pages", String(run.pages_fetched)],
+    ["Time", duration(run.duration_seconds)],
+    ...(failures.length > 0 ? [["Failures", String(failures.length)] as [string, string]] : []),
+  ];
+
   const lines = [
-    `${ok ? "✅" : "🚨"} <b>${GAME_LABEL[run.game]} ${escapeHtml(run.kind)}` +
-      ` — ${ok ? "ok" : "FAILED"}</b>`,
-    [
-      `${plural(run.draws_written, "draw")} written`,
-      plural(run.pages_fetched, "page"),
-      duration(run.duration_seconds),
-      ...(failures.length > 0 ? [plural(failures.length, "failure")] : []),
-    ].join(" · "),
-    ...draws.map(escapeHtml),
+    `<p>${ok ? "✅" : "🚨"} <b>${GAME_LABEL[run.game]} ${escapeHtml(run.kind)}` +
+      ` — ${ok ? "ok" : "FAILED"}</b></p>`,
+    `<table bordered compact>${counts
+      .map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`)
+      .join("")}</table>`,
+    ...draws.map((d) => `<p>${escapeHtml(d)}</p>`),
     ...failures
       .slice(0, MAX_FAILURE_LINES)
-      .map((f) => `<code>${escapeHtml(f)}</code>`),
+      .map((f) => `<p><code>${escapeHtml(f)}</code></p>`),
   ];
 
   if (failures.length > MAX_FAILURE_LINES) {
-    lines.push(`…and ${failures.length - MAX_FAILURE_LINES} more`);
+    lines.push(`<p>…and ${failures.length - MAX_FAILURE_LINES} more</p>`);
   }
   return lines.join("\n");
 }
