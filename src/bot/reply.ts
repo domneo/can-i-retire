@@ -88,9 +88,12 @@ export const STALE_BUTTON = `That button no longer works. Send your numbers agai
 const para = (html: string): string => `<p>${html}</p>`;
 
 const row = (cells: string[], tag: "td" | "th" = "td"): string =>
-  `<tr>${cells.map((c) => `<${tag}>${c}</${tag}>`).join("")}</tr>`;
+  `<tr>${cells.map((c) => `<${tag} align="center">${c}</${tag}>`).join("")}</tr>`;
 
-/** One row per line, so a message reads as its table in a test or a log. */
+/**
+ * Every cell centred. One row per line, so a message reads as its table in a
+ * test or a log.
+ */
 const table = (caption: string, head: string[], rows: string[][]): string =>
   [
     `<table bordered striped compact><caption>${caption}</caption>`,
@@ -109,20 +112,26 @@ const held = (tickets: Ticket[]): Set<number | string> =>
 const mark = (holds: Set<number | string>, value: number | string): string =>
   holds.has(value) ? `<b>${value}</b>` : String(value);
 
-/** The draw's own numbers, with the ones the tickets hold in bold. */
+/**
+ * The draw's own numbers, with the ones the tickets hold in bold. Each row's
+ * numbers are one <code>, so one tap copies them all.
+ */
 function drawTable(draw: TotoDrawResponse | FourDDrawResponse, tickets: Ticket[]): string {
   const holds = held(tickets);
-  const caption = `<b>${GAME_NAME[draw.game]} ${draw.drawNo}</b> · ${displayDate(draw.drawDate)}`;
+  const code = (...values: (number | string)[]): string =>
+    `<code>${values.map((v) => mark(holds, v)).join(" ")}</code>`;
+  const caption =
+    `<b>${GAME_NAME[draw.game]} Draw #${draw.drawNo}</b> · ${displayDate(draw.drawDate)}`;
   const rows =
     draw.game === "toto"
       ? [
-          ["Winning", draw.numbers.map((n) => mark(holds, n)).join(" ")],
-          ["Additional", mark(holds, draw.additional)],
+          ["Winning", code(...draw.numbers)],
+          ["Additional", code(draw.additional)],
         ]
       : [
-          ["1st", mark(holds, draw.first)],
-          ["2nd", mark(holds, draw.second)],
-          ["3rd", mark(holds, draw.third)],
+          ["1st", code(draw.first)],
+          ["2nd", code(draw.second)],
+          ["3rd", code(draw.third)],
         ];
   return [
     `<table bordered compact><caption>${caption}</caption>`,

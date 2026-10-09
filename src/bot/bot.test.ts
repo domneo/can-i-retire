@@ -185,21 +185,21 @@ test("a picked draw checks the numbers against that draw", async () => {
     reply!.text,
     [
       "<p>🎉 <b>You can retire!!!</b></p>",
-      "<table bordered compact><caption><b>4D 5534</b> · Wed 30 Sep 2026</caption>",
-      "<tr><th>1st</th><td>8608</td></tr>",
-      "<tr><th>2nd</th><td>4918</td></tr>",
-      "<tr><th>3rd</th><td>9832</td></tr>",
+      "<table bordered compact><caption><b>4D Draw #5534</b> · Wed 30 Sep 2026</caption>",
+      "<tr><th>1st</th><td><code>8608</code></td></tr>",
+      "<tr><th>2nd</th><td><code>4918</code></td></tr>",
+      "<tr><th>3rd</th><td><code>9832</code></td></tr>",
       "</table>",
       "<table bordered striped compact><caption>Your tickets · prize per $1 bet</caption>",
-      "<tr><th>Ticket</th><th>Prize</th><th>Big</th><th>Small</th></tr>",
-      "<tr><td><code>0427</code></td><td><b>Starter</b></td><td>$250</td><td>nothing</td></tr>",
+      '<tr><th align="center">Ticket</th><th align="center">Prize</th><th align="center">Big</th><th align="center">Small</th></tr>',
+      '<tr><td align="center"><code>0427</code></td><td align="center"><b>Starter</b></td><td align="center">$250</td><td align="center">nothing</td></tr>',
       "</table>",
     ].join("\n"),
   );
 
   const [loss] = await press("d:5534:1234");
   assert.match(loss!.text, /^<p><b>You cannot retire yet\.<\/b><\/p>/);
-  assert.match(loss!.text, /<tr><td><code>1234<\/code><\/td><td>No prize<\/td>/);
+  assert.match(loss!.text, /<td align="center"><code>1234<\/code><\/td><td align="center">No prize<\/td>/);
 });
 
 test("the upcoming draw has not happened yet", async () => {
@@ -209,8 +209,8 @@ test("the upcoming draw has not happened yet", async () => {
     [
       "<p><b>You cannot retire yet.</b></p>",
       "<table bordered striped compact><caption><b>4D</b> · Sun 4 Oct 2026 · draw has not happened yet</caption>",
-      "<tr><th>Ticket</th></tr>",
-      "<tr><td><code>0427</code></td></tr>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>0427</code></td></tr>',
       "</table>",
       "<p>Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.</p>",
     ].join("\n"),
@@ -239,13 +239,13 @@ test("an old upcoming button checks the draw once it is stored", async () => {
     reply!.text,
     [
       "<p>🎉 <b>You can retire!!!</b></p>",
-      "<table bordered compact><caption><b>TOTO 4217</b> · Mon 14 Sep 2026</caption>",
-      "<tr><th>Winning</th><td><b>2</b> <b>14</b> <b>16</b> <b>21</b> <b>36</b> <b>47</b></td></tr>",
-      "<tr><th>Additional</th><td>1</td></tr>",
+      "<table bordered compact><caption><b>TOTO Draw #4217</b> · Mon 14 Sep 2026</caption>",
+      "<tr><th>Winning</th><td><code><b>2</b> <b>14</b> <b>16</b> <b>21</b> <b>36</b> <b>47</b></code></td></tr>",
+      "<tr><th>Additional</th><td><code>1</code></td></tr>",
       "</table>",
       "<table bordered striped compact><caption>Your tickets</caption>",
-      "<tr><th>Ticket</th><th>Matched</th><th>Prize</th></tr>",
-      "<tr><td><code>2 14 16 21 36 47</code></td><td>6</td><td><b>Group 1 $1,553,027</b></td></tr>",
+      '<tr><th align="center">Ticket</th><th align="center">Matched</th><th align="center">Prize</th></tr>',
+      '<tr><td align="center"><code>2 14 16 21 36 47</code></td><td align="center">6</td><td align="center"><b>Group 1 $1,553,027</b></td></tr>',
       "</table>",
       "<p>Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.</p>",
     ].join("\n"),
@@ -273,19 +273,19 @@ test("/retire checks each saved ticket against the draw it was saved for", async
     [
       "<p><b>You cannot retire yet.</b></p>",
       "<table bordered striped compact><caption><b>TOTO</b> · Mon 5 Oct 2026 · draw has not happened yet</caption>",
-      "<tr><th>Ticket</th></tr>",
-      "<tr><td><code>2 14 16 21 36 47</code></td></tr>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>2 14 16 21 36 47</code></td></tr>',
       "</table>",
       "<hr/>",
       "<table bordered striped compact><caption><b>4D</b> · Sun 4 Oct 2026 · draw has not happened yet</caption>",
-      "<tr><th>Ticket</th></tr>",
-      "<tr><td><code>0427</code></td></tr>",
-      "<tr><td><code>1234</code></td></tr>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>0427</code></td></tr>',
+      '<tr><td align="center"><code>1234</code></td></tr>',
       "</table>",
       "<hr/>",
       "<table bordered striped compact><caption><b>TOTO</b> · Thu 17 Sep 2026 · results not published yet</caption>",
-      "<tr><th>Ticket</th></tr>",
-      "<tr><td><code>2 14 16 21 36 47</code></td></tr>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>2 14 16 21 36 47</code></td></tr>',
       "</table>",
       "<p>Send numbers to add another ticket.</p>",
     ].join("\n"),
@@ -299,24 +299,24 @@ test("/retire checks each saved ticket against the draw it was saved for", async
     [
       "<p>🎉 <b>You can retire!!!</b></p>",
       "<table bordered striped compact><caption><b>TOTO</b> · Mon 5 Oct 2026 · draw has not happened yet</caption>",
-      "<tr><th>Ticket</th></tr>",
-      "<tr><td><code>2 14 16 21 36 47</code></td></tr>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>2 14 16 21 36 47</code></td></tr>',
       "</table>",
       "<hr/>",
-      "<table bordered compact><caption><b>4D 5536</b> · Sun 4 Oct 2026</caption>",
-      "<tr><th>1st</th><td>8608</td></tr>",
-      "<tr><th>2nd</th><td>4918</td></tr>",
-      "<tr><th>3rd</th><td>9832</td></tr>",
+      "<table bordered compact><caption><b>4D Draw #5536</b> · Sun 4 Oct 2026</caption>",
+      "<tr><th>1st</th><td><code>8608</code></td></tr>",
+      "<tr><th>2nd</th><td><code>4918</code></td></tr>",
+      "<tr><th>3rd</th><td><code>9832</code></td></tr>",
       "</table>",
       "<table bordered striped compact><caption>Your tickets · prize per $1 bet</caption>",
-      "<tr><th>Ticket</th><th>Prize</th><th>Big</th><th>Small</th></tr>",
-      "<tr><td><code>0427</code></td><td><b>Starter</b></td><td>$250</td><td>nothing</td></tr>",
-      "<tr><td><code>1234</code></td><td>No prize</td><td>–</td><td>–</td></tr>",
+      '<tr><th align="center">Ticket</th><th align="center">Prize</th><th align="center">Big</th><th align="center">Small</th></tr>',
+      '<tr><td align="center"><code>0427</code></td><td align="center"><b>Starter</b></td><td align="center">$250</td><td align="center">nothing</td></tr>',
+      '<tr><td align="center"><code>1234</code></td><td align="center">No prize</td><td align="center">–</td><td align="center">–</td></tr>',
       "</table>",
       "<hr/>",
       "<table bordered striped compact><caption><b>TOTO</b> · Thu 17 Sep 2026 · results not published yet</caption>",
-      "<tr><th>Ticket</th></tr>",
-      "<tr><td><code>2 14 16 21 36 47</code></td></tr>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>2 14 16 21 36 47</code></td></tr>',
       "</table>",
       "<p>Send numbers to add another ticket.</p>",
     ].join("\n"),
@@ -365,8 +365,8 @@ test("a message that cannot be edited gets the answer below it", async () => {
 
 test("a drawn 4D number is bold in the draw table", async () => {
   const [reply] = await press("d:5534:8608");
-  assert.match(reply!.text, /^<tr><th>1st<\/th><td><b>8608<\/b><\/td><\/tr>$/m);
-  assert.match(reply!.text, /^<tr><th>2nd<\/th><td>4918<\/td><\/tr>$/m);
+  assert.match(reply!.text, /^<tr><th>1st<\/th><td><code><b>8608<\/b><\/code><\/td><\/tr>$/m);
+  assert.match(reply!.text, /^<tr><th>2nd<\/th><td><code>4918<\/code><\/td><\/tr>$/m);
 });
 
 test("a malformed ticket gets the format rule", async () => {
