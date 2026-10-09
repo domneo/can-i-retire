@@ -17,7 +17,7 @@ export function dollars(cents: number | null): string {
 }
 
 /**
- * `TOTO 4217 · Mon 14 Sep 2026 · 6 7 8 16 18 35 (+31) · Group 1 $3,106,055`
+ * `TOTO Draw #4217 · Mon 14 Sep 2026 · 6 7 8 16 18 35 (+31) · Group 1 $3,106,055`
  *
  * `cascadeDraw` is not on the draw: nothing in the results markup says so, it
  * comes from the cascade draw list alongside it.
@@ -29,7 +29,7 @@ export function totoLine(draw: TotoDraw, cascadeDraw = false): string {
   ].filter((f) => f !== null);
 
   return [
-    `TOTO ${draw.drawNo}`,
+    `TOTO Draw #${draw.drawNo}`,
     displayDate(draw.drawDate),
     `${draw.numbers.join(" ")} (+${draw.additional})`,
     `Group 1 ${dollars(draw.group1PrizeCents)}`,
@@ -37,10 +37,10 @@ export function totoLine(draw: TotoDraw, cascadeDraw = false): string {
   ].join(" · ");
 }
 
-/** `4D 5536 · Sat 19 Sep 2026 · 1st 1234 · 2nd 5678 · 3rd 9012` */
+/** `4D Draw #5536 · Sat 19 Sep 2026 · 1st 1234 · 2nd 5678 · 3rd 9012` */
 export function fourdLine(draw: FourDDraw): string {
   return [
-    `4D ${draw.drawNo}`,
+    `4D Draw #${draw.drawNo}`,
     displayDate(draw.drawDate),
     `1st ${draw.first}`,
     `2nd ${draw.second}`,

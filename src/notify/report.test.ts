@@ -18,9 +18,14 @@ const OK: RunRow = {
 test("a successful run reports counts and the draw", () => {
   assert.equal(
     formatRun(OK, ["TOTO 4217 · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)"]),
-    "✅ <b>TOTO manual — ok</b>\n" +
-      "1 draw written · 3 pages · 7s\n" +
-      "TOTO 4217 · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)",
+    [
+      "<p>✅ <b>TOTO manual — ok</b></p>",
+      "<table bordered compact>" +
+        "<tr><th>Draws written</th><td>1</td></tr>" +
+        "<tr><th>Pages</th><td>3</td></tr>" +
+        "<tr><th>Time</th><td>7s</td></tr></table>",
+      "<p>TOTO 4217 · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)</p>",
+    ].join("\n"),
   );
 });
 
@@ -31,21 +36,22 @@ test("a failed run reports the error and the draw it failed on", () => {
     draws_written: 0,
     error: "toto 4218: no draw number in \"\"",
   });
-  assert.match(text, /^🚨 <b>TOTO manual — FAILED<\/b>$/m);
-  assert.match(text, /0 draws written · 3 pages · 7s · 1 failure/);
-  assert.match(text, /<code>toto 4218: no draw number in ""<\/code>/);
+  assert.match(text, /^<p>🚨 <b>TOTO manual — FAILED<\/b><\/p>$/m);
+  assert.match(text, /<th>Draws written<\/th><td>0<\/td>/);
+  assert.match(text, /<th>Failures<\/th><td>1<\/td>/);
+  assert.match(text, /^<p><code>toto 4218: no draw number in ""<\/code><\/p>$/m);
 });
 
 test("minutes once a run passes a minute", () => {
-  assert.match(formatRun({ ...OK, duration_seconds: 671 }), / · 11m 11s$/m);
-  assert.match(formatRun({ ...OK, duration_seconds: 120 }), / · 2m$/m);
+  assert.match(formatRun({ ...OK, duration_seconds: 671 }), /<th>Time<\/th><td>11m 11s<\/td>/);
+  assert.match(formatRun({ ...OK, duration_seconds: 120 }), /<th>Time<\/th><td>2m<\/td>/);
 });
 
 test("caps the failure list rather than sending a wall of text", () => {
   const errors = Array.from({ length: 14 }, (_, i) => `4d ${5500 + i}: boom`);
   const text = formatRun({ ...OK, status: "error", error: errors.join("\n") });
   assert.equal(text.match(/<code>/g)?.length, 10);
-  assert.match(text, /…and 4 more$/);
+  assert.match(text, /<p>…and 4 more<\/p>$/);
 });
 
 test("escapes HTML so a parser message cannot break the markup", () => {

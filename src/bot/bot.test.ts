@@ -41,6 +41,10 @@ const bot = createBot(
 );
 
 interface Sent {
+  /** True for an edit of the pressed message, false for a new message. */
+  edited: boolean;
+  /** True for a rich message, whose `text` is rich HTML. */
+  rich: boolean;
   text: string;
   /** Each button as "label → callback data". */
   buttons: string[];
@@ -49,15 +53,25 @@ interface Sent {
 // Every API call lands here instead of on Telegram.
 const sent: Sent[] = [];
 let answered = 0;
+/** When set, the next edit fails with this description, as Telegram would. */
+let editFails: string | null = null;
 bot.api.config.use(async (_prev, method, payload) => {
-  if (method === "sendMessage") {
-    const { text, reply_markup } = payload as {
-      text: string;
+  if (method === "editMessageText" && editFails !== null) {
+    const description = editFails;
+    editFails = null;
+    return { ok: false, error_code: 400, description } as never;
+  }
+  if (method === "sendMessage" || method === "sendRichMessage" || method === "editMessageText") {
+    const { text, rich_message, reply_markup } = payload as {
+      text?: string;
+      rich_message?: { html: string };
       reply_markup?: InlineKeyboardMarkup;
     };
     const buttons = (reply_markup?.inline_keyboard ?? []).flat();
     sent.push({
-      text,
+      edited: method === "editMessageText",
+      rich: rich_message !== undefined,
+      text: rich_message?.html ?? text ?? "",
       buttons: buttons.map((b) => `${b.text} → ${"callback_data" in b ? b.callback_data : ""}`),
     });
   }
@@ -87,6 +101,11 @@ async function say(text: string, userId = 42): Promise<Sent[]> {
   return [...sent];
 }
 
+/** The keyboard on the message every pressed button sits on. */
+const PICKER: InlineKeyboardMarkup = {
+  inline_keyboard: [[{ text: "Sun 4 Oct 2026 · upcoming", callback_data: "u:2026-10-04:0427" }]],
+};
+
 /** Press the button carrying `data`; returns the bot's replies. */
 async function press(data: string, userId = 42): Promise<Sent[]> {
   sent.length = 0;
@@ -97,7 +116,13 @@ async function press(data: string, userId = 42): Promise<Sent[]> {
       from: user(userId),
       chat_instance: "c",
       data,
-      message: { message_id: 1, date: 0, chat: privateChat(userId), text: "Check …" },
+      message: {
+        message_id: 1,
+        date: 0,
+        chat: privateChat(userId),
+        text: "Check …",
+        reply_markup: PICKER,
+      },
     },
   } as Update);
   return [...sent];
@@ -128,7 +153,7 @@ test("/retire and 'Can I retire?' ask for numbers when nothing is saved", async 
 
 test("with no draws stored, only the upcoming draw is offered", async () => {
   const [reply] = await say("47 2 16 14 21 36");
-  assert.equal(reply!.text, "Check <b>TOTO</b> 2 14 16 21 36 47 against which draw?");
+  assert.equal(reply!.text, "Check <b>TOTO</b> <code>2 14 16 21 36 47</code> against which draw?");
   assert.deepEqual(reply!.buttons, [
     "Mon 5 Oct 2026 · upcoming → u:2026-10-05:2 14 16 21 36 47",
   ]);
@@ -142,7 +167,7 @@ test("numbers are offered the upcoming draw and the last four, newest first", as
   await writeFourdOn(5535, "2026-10-03");
 
   const [reply] = await say("0427");
-  assert.equal(reply!.text, "Check <b>4D</b> 0427 against which draw?");
+  assert.equal(reply!.text, "Check <b>4D</b> <code>0427</code> against which draw?");
   assert.deepEqual(reply!.buttons, [
     "Sun 4 Oct 2026 · upcoming → u:2026-10-04:0427",
     "Sat 3 Oct 2026 → d:5535:0427",
@@ -155,19 +180,26 @@ test("numbers are offered the upcoming draw and the last four, newest first", as
 test("a picked draw checks the numbers against that draw", async () => {
   const [reply] = await press("d:5534:0427");
   assert.equal(answered > 0, true);
+  assert.equal(reply!.rich, true);
   assert.equal(
     reply!.text,
     [
-      "🎉 <b>You can retire!!!</b>",
-      "",
-      "<b>4D 5534</b> · Wed 30 Sep 2026 · 1st 8608 · 2nd 4918 · 3rd 9832",
-      "• 0427 — Starter prize: $250 Big, Small pays nothing, per $1",
+      "<p>🎉 <b>You can retire!!!</b></p>",
+      "<table bordered compact><caption><b>4D Draw #5534</b> · Wed 30 Sep 2026</caption>",
+      "<tr><th>1st</th><td><code>8608</code></td></tr>",
+      "<tr><th>2nd</th><td><code>4918</code></td></tr>",
+      "<tr><th>3rd</th><td><code>9832</code></td></tr>",
+      "</table>",
+      "<table bordered striped compact><caption>Your tickets · prize per $1 bet</caption>",
+      '<tr><th align="center">Ticket</th><th align="center">Prize</th><th align="center">Big</th><th align="center">Small</th></tr>',
+      '<tr><td align="center"><code>0427</code></td><td align="center"><b>Starter</b></td><td align="center">$250</td><td align="center">nothing</td></tr>',
+      "</table>",
     ].join("\n"),
   );
 
   const [loss] = await press("d:5534:1234");
-  assert.match(loss!.text, /^<b>You cannot retire yet\.<\/b>/);
-  assert.match(loss!.text, /• 1234 — no prize/);
+  assert.match(loss!.text, /^<p><b>You cannot retire yet\.<\/b><\/p>/);
+  assert.match(loss!.text, /<td align="center"><code>1234<\/code><\/td><td align="center">No prize<\/td>/);
 });
 
 test("the upcoming draw has not happened yet", async () => {
@@ -175,12 +207,12 @@ test("the upcoming draw has not happened yet", async () => {
   assert.equal(
     reply!.text,
     [
-      "<b>You cannot retire yet.</b>",
-      "",
-      "The 4D draw on Sun 4 Oct 2026 has not happened yet.",
-      "• 0427",
-      "",
-      "Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.",
+      "<p><b>You cannot retire yet.</b></p>",
+      "<table bordered striped compact><caption><b>4D</b> · Sun 4 Oct 2026 · draw has not happened yet</caption>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>0427</code></td></tr>',
+      "</table>",
+      "<p>Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.</p>",
     ].join("\n"),
   );
 
@@ -206,12 +238,16 @@ test("an old upcoming button checks the draw once it is stored", async () => {
   assert.equal(
     reply!.text,
     [
-      "🎉 <b>You can retire!!!</b>",
-      "",
-      "<b>TOTO 4217</b> · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)",
-      "• 2 14 16 21 36 47 — Group 1 $1,553,027",
-      "",
-      "Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.",
+      "<p>🎉 <b>You can retire!!!</b></p>",
+      "<table bordered compact><caption><b>TOTO Draw #4217</b> · Mon 14 Sep 2026</caption>",
+      "<tr><th>Winning</th><td><code><b>2</b> <b>14</b> <b>16</b> <b>21</b> <b>36</b> <b>47</b></code></td></tr>",
+      "<tr><th>Additional</th><td><code>1</code></td></tr>",
+      "</table>",
+      "<table bordered striped compact><caption>Your tickets</caption>",
+      '<tr><th align="center">Ticket</th><th align="center">Matched</th><th align="center">Prize</th></tr>',
+      '<tr><td align="center"><code>2 14 16 21 36 47</code></td><td align="center">6</td><td align="center"><b>Group 1 $1,553,027</b></td></tr>',
+      "</table>",
+      "<p>Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.</p>",
     ].join("\n"),
   );
 });
@@ -235,19 +271,23 @@ test("/retire checks each saved ticket against the draw it was saved for", async
   assert.equal(
     before!.text,
     [
-      "<b>You cannot retire yet.</b>",
-      "",
-      "<b>TOTO</b> · Mon 5 Oct 2026 · draw has not happened yet",
-      "• 2 14 16 21 36 47",
-      "",
-      "<b>4D</b> · Sun 4 Oct 2026 · draw has not happened yet",
-      "• 0427",
-      "• 1234",
-      "",
-      "<b>TOTO</b> · Thu 17 Sep 2026 · results not published yet",
-      "• 2 14 16 21 36 47",
-      "",
-      "Send numbers to add another ticket.",
+      "<p><b>You cannot retire yet.</b></p>",
+      "<table bordered striped compact><caption><b>TOTO</b> · Mon 5 Oct 2026 · draw has not happened yet</caption>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>2 14 16 21 36 47</code></td></tr>',
+      "</table>",
+      "<hr/>",
+      "<table bordered striped compact><caption><b>4D</b> · Sun 4 Oct 2026 · draw has not happened yet</caption>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>0427</code></td></tr>',
+      '<tr><td align="center"><code>1234</code></td></tr>',
+      "</table>",
+      "<hr/>",
+      "<table bordered striped compact><caption><b>TOTO</b> · Thu 17 Sep 2026 · results not published yet</caption>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>2 14 16 21 36 47</code></td></tr>',
+      "</table>",
+      "<p>Send numbers to add another ticket.</p>",
     ].join("\n"),
   );
 
@@ -257,19 +297,28 @@ test("/retire checks each saved ticket against the draw it was saved for", async
   assert.equal(
     after!.text,
     [
-      "🎉 <b>You can retire!!!</b>",
-      "",
-      "<b>TOTO</b> · Mon 5 Oct 2026 · draw has not happened yet",
-      "• 2 14 16 21 36 47",
-      "",
-      "<b>4D 5536</b> · Sun 4 Oct 2026 · 1st 8608 · 2nd 4918 · 3rd 9832",
-      "• 0427 — Starter prize: $250 Big, Small pays nothing, per $1",
-      "• 1234 — no prize",
-      "",
-      "<b>TOTO</b> · Thu 17 Sep 2026 · results not published yet",
-      "• 2 14 16 21 36 47",
-      "",
-      "Send numbers to add another ticket.",
+      "<p>🎉 <b>You can retire!!!</b></p>",
+      "<table bordered striped compact><caption><b>TOTO</b> · Mon 5 Oct 2026 · draw has not happened yet</caption>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>2 14 16 21 36 47</code></td></tr>',
+      "</table>",
+      "<hr/>",
+      "<table bordered compact><caption><b>4D Draw #5536</b> · Sun 4 Oct 2026</caption>",
+      "<tr><th>1st</th><td><code>8608</code></td></tr>",
+      "<tr><th>2nd</th><td><code>4918</code></td></tr>",
+      "<tr><th>3rd</th><td><code>9832</code></td></tr>",
+      "</table>",
+      "<table bordered striped compact><caption>Your tickets · prize per $1 bet</caption>",
+      '<tr><th align="center">Ticket</th><th align="center">Prize</th><th align="center">Big</th><th align="center">Small</th></tr>',
+      '<tr><td align="center"><code>0427</code></td><td align="center"><b>Starter</b></td><td align="center">$250</td><td align="center">nothing</td></tr>',
+      '<tr><td align="center"><code>1234</code></td><td align="center">No prize</td><td align="center">–</td><td align="center">–</td></tr>',
+      "</table>",
+      "<hr/>",
+      "<table bordered striped compact><caption><b>TOTO</b> · Thu 17 Sep 2026 · results not published yet</caption>",
+      '<tr><th align="center">Ticket</th></tr>',
+      '<tr><td align="center"><code>2 14 16 21 36 47</code></td></tr>',
+      "</table>",
+      "<p>Send numbers to add another ticket.</p>",
     ].join("\n"),
   );
 });
@@ -288,6 +337,36 @@ test("a draw number that is not stored is never called a loss", async () => {
 test("a button this bot did not write asks for the numbers again", async () => {
   const [reply] = await press("d:5534:12345");
   assert.match(reply!.text, /no longer works/);
+  assert.equal(reply!.rich, false);
+  // Its keyboard goes too: every button on it would fail the same way.
+  assert.equal(reply!.edited, true);
+  assert.deepEqual(reply!.buttons, []);
+});
+
+test("a press answers in place and keeps the keyboard for another pick", async () => {
+  const replies = await press("d:5534:0427");
+  assert.equal(replies.length, 1);
+  assert.equal(replies[0]!.edited, true);
+  assert.deepEqual(replies[0]!.buttons, ["Sun 4 Oct 2026 · upcoming → u:2026-10-04:0427"]);
+});
+
+test("the same button twice leaves the answer as it is", async () => {
+  editFails = "Bad Request: message is not modified";
+  assert.deepEqual(await press("d:5534:0427"), []);
+});
+
+test("a message that cannot be edited gets the answer below it", async () => {
+  editFails = "Bad Request: message to edit not found";
+  const [reply] = await press("d:5534:0427");
+  assert.equal(reply!.edited, false);
+  assert.equal(reply!.rich, true);
+  assert.match(reply!.text, /You can retire!!!/);
+});
+
+test("a drawn 4D number is bold in the draw table", async () => {
+  const [reply] = await press("d:5534:8608");
+  assert.match(reply!.text, /^<tr><th>1st<\/th><td><code><b>8608<\/b><\/code><\/td><\/tr>$/m);
+  assert.match(reply!.text, /^<tr><th>2nd<\/th><td><code>4918<\/code><\/td><\/tr>$/m);
 });
 
 test("a malformed ticket gets the format rule", async () => {

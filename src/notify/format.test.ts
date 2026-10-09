@@ -35,7 +35,7 @@ test("formats cents as dollars, with cents only when there are any", () => {
 test("summarises a TOTO draw", () => {
   assert.equal(
     totoLine(TOTO),
-    "TOTO 4217 · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1) · Group 1 $5,853,782",
+    "TOTO Draw #4217 · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1) · Group 1 $5,853,782",
   );
 });
 
@@ -49,6 +49,6 @@ test("flags snowballed and cascade draws", () => {
 test("summarises a 4D draw as its top three", () => {
   assert.equal(
     fourdLine(FOURD),
-    "4D 5536 · Sat 19 Sep 2026 · 1st 0427 · 2nd 5678 · 3rd 9012",
+    "4D Draw #5536 · Sat 19 Sep 2026 · 1st 0427 · 2nd 5678 · 3rd 9012",
   );
 });

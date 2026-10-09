@@ -9,7 +9,7 @@
 // Private chats only (PRD: group chats are out of scope for v1). Anything
 // from a group is ignored rather than answered.
 
-import { Bot, type BotConfig, type Context } from "grammy";
+import { Bot, GrammyError, type BotConfig, type Context } from "grammy";
 import { savedTickets, saveTicket, upsertUser } from "../db/tickets.js";
 import { checkDraw, checkSaved, checkUpcoming, drawOptions } from "./check.js";
 import { decodeChoice } from "./choice.js";
@@ -33,6 +33,9 @@ import { parseTicket } from "./ticket.js";
 const CAN_I_RETIRE = /^\s*can\s+i\s+retire\s*[?!.]*\s*$/i;
 
 const html = (ctx: Context, text: string) => ctx.reply(text, { parse_mode: "HTML" });
+
+/** Results are rich messages, for their tables. `text` is rich HTML. */
+const rich = (ctx: Context, text: string) => ctx.replyWithRichMessage({ html: text });
 
 /**
  * `config` is for tests, which pass `botInfo` to skip the getMe call.
@@ -68,7 +71,7 @@ export function createBot(
   const retire = async (ctx: Context & { from: { id: number } }) => {
     const saved = await savedTickets(ctx.from.id);
     if (saved.length === 0) return html(ctx, ASK_NUMBERS);
-    return html(ctx, savedMessage(await checkSaved(saved, now())));
+    return rich(ctx, savedMessage(await checkSaved(saved, now())));
   };
 
   dm.command("start", (ctx) => html(ctx, WELCOME));
@@ -90,14 +93,37 @@ export function createBot(
     });
   });
 
-  // The keyboard stays on its message, so another draw can be picked for the
-  // same numbers without typing them again.
+  // The answer replaces the message the button is on, and the keyboard stays,
+  // so another draw can be picked for the same numbers without typing them
+  // again — and the chat does not fill up with one reply per press.
   dm.on("callback_query:data", async (ctx) => {
     await ctx.answerCallbackQuery();
+
+    /**
+     * `result` is rich HTML, anything else plain HTML. `keep: false` drops the
+     * keyboard: a stale one would only fail again.
+     */
+    const show = async (text: string, { result = true, keep = true } = {}) => {
+      const message = ctx.callbackQuery.message;
+      const keyboard =
+        keep && message && "reply_markup" in message ? message.reply_markup : undefined;
+      try {
+        await (result
+          ? ctx.editMessageText({ html: text }, { reply_markup: keyboard })
+          : ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: keyboard }));
+      } catch (err) {
+        if (!(err instanceof GrammyError)) throw err;
+        // The same button twice: the answer is already on screen.
+        if (err.description.includes("message is not modified")) return;
+        // Too old or gone: answer below it instead.
+        await (result ? rich(ctx, text) : html(ctx, text));
+      }
+    };
+
     const choice = decodeChoice(ctx.callbackQuery.data);
-    if (!choice) return html(ctx, STALE_BUTTON);
+    if (!choice) return show(STALE_BUTTON, { result: false, keep: false });
     if (choice.kind === "draw") {
-      return html(ctx, resultMessage(await checkDraw(choice.ticket, choice.drawNo)));
+      return show(resultMessage(await checkDraw(choice.ticket, choice.drawNo)));
     }
     // Saved whatever the check finds: a draw whose results are not out yet
     // is exactly what a later /retire is for.
@@ -105,7 +131,7 @@ export function createBot(
     const checked = await checkUpcoming(choice.ticket, choice.date, now());
     const reply =
       checked === "not drawn" ? notDrawnYet(choice.ticket, choice.date) : resultMessage(checked);
-    return html(ctx, `${reply}\n\n${savedNote(isNew)}`);
+    return show(`${reply}\n${savedNote(isNew)}`);
   });
 
   return bot;
