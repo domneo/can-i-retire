@@ -143,7 +143,7 @@ The Telegram bot answers in private chats; group messages are ignored.
 | ------------------------------ | ---------------------------------------------------- |
 | `0427`                         | 4D: asks which draw to check against                 |
 | `2 14 16 21 36 47` (6–12 nums) | TOTO, System entries too: asks which draw            |
-| `/retire` or "Can I retire?"   | Checks saved tickets; asks for numbers if none       |
+| `/retire` or "Can I retire?"   | Upcoming and latest draws, with your saved tickets   |
 | Anything else                  | The number format rule                               |
 
 The question comes with one button per draw: the upcoming draw, then the last
@@ -163,19 +163,40 @@ yet. An old upcoming button whose draw has since been stored checks that draw;
 one whose date has passed without stored results says results are not
 published yet. The bot never reports a loss without results to back it.
 
-Pressing the upcoming draw also saves the ticket for that draw date. After
-that, `/retire` or "Can I retire?" checks each saved ticket against the draw it
-was saved for, up to the ten newest, grouped by draw:
+Pressing the upcoming draw also saves the ticket for that draw date.
+`/retire` or "Can I retire?" then answers in three messages, TOTO before 4D
+in each:
+
+1. **The verdict**, then the newest stored draw of each game, with the
+   tickets saved for it checked against it.
+2. **Upcoming draws:** the next draw of each game, with the tickets saved for
+   it. A draw after the latest stored one whose results never arrived shows
+   here too, as "results not published yet", so a saved ticket is never
+   dropped silently.
+3. **What to send next.**
 
 ```
 🎉 <b>You can retire!!!</b>
-
-<b>TOTO</b> · Mon 5 Oct 2026 · draw has not happened yet
-• 2 14 16 21 36 47
-
+<b>TOTO 4217</b> · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)
 <b>4D 5536</b> · Sun 4 Oct 2026 · 1st 8608 · 2nd 4918 · 3rd 9832
 • 0427 — Starter prize: $250 Big, Small pays nothing, per $1
 ```
+
+```
+📅 <b>Upcoming draws</b>
+<b>TOTO</b> · Mon 5 Oct 2026
+• 2 14 16 21 36 47
+<b>4D</b> · Wed 7 Oct 2026
+• No tickets saved
+```
+
+```
+Send numbers to add another ticket.
+```
+
+Tickets saved for draws older than the latest stored one are not shown, and
+only the latest draws decide the verdict. With nothing saved, the same
+messages are sent, and the last one gives the number format rule.
 
 A saved ticket is bound by date, not draw number: the draw has no number until
 its results are scraped, so each check looks the draw up by game and date.

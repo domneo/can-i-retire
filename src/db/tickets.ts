@@ -5,11 +5,9 @@ import type { ResultSet } from "@libsql/client";
 import { db } from "./client.js";
 import type { FourDPrize, FourDTier } from "../bot/evaluate.js";
 import { canonical, parseTicket, type Ticket } from "../bot/ticket.js";
+import type { Game } from "../scrape/url.js";
 
 const rows = <T>(rs: ResultSet): T[] => rs.rows as unknown as T[];
-
-/** A /retire looks at no more than this many saved tickets. */
-export const TICKET_LIMIT = 10;
 
 export interface SavedTicket {
   ticket: Ticket;
@@ -47,14 +45,21 @@ export async function saveTicket(
   return rs.rowsAffected === 1;
 }
 
-/** The user's saved tickets, newest draw first, then in the order saved. */
-export async function savedTickets(telegramUserId: number): Promise<SavedTicket[]> {
+/**
+ * The user's saved tickets for draws on or after `since[game]`, oldest draw
+ * first, then in the order saved. An empty `since` takes every saved ticket of
+ * that game.
+ */
+export async function ticketsSince(
+  telegramUserId: number,
+  since: Record<Game, string>,
+): Promise<SavedTicket[]> {
   const rs = await db.execute({
     sql: `SELECT numbers, draw_date FROM tickets
           WHERE telegram_user_id = ? AND draw_date IS NOT NULL
-          ORDER BY draw_date DESC, id
-          LIMIT ?`,
-    args: [telegramUserId, TICKET_LIMIT],
+            AND ((game = 'toto' AND draw_date >= ?) OR (game = '4d' AND draw_date >= ?))
+          ORDER BY draw_date, id`,
+    args: [telegramUserId, since.toto, since["4d"]],
   });
   // Stored as canonical text, so parsing it again cannot fail; a row that
   // somehow does is skipped rather than checked as something else.

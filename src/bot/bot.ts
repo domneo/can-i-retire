@@ -4,14 +4,15 @@
 // A check is two steps. Numbers in, and the bot offers the upcoming draw and
 // the last few stored ones as buttons. A button press checks the numbers
 // against that one draw. Picking the upcoming draw also saves the ticket, and
-// /retire checks every saved ticket against the draw it was saved for.
+// /retire shows the upcoming and latest draw of each game with the tickets
+// saved for them.
 //
 // Private chats only (PRD: group chats are out of scope for v1). Anything
 // from a group is ignored rather than answered.
 
 import { Bot, GrammyError, type BotConfig, type Context } from "grammy";
-import { savedTickets, saveTicket, upsertUser } from "../db/tickets.js";
-import { checkDraw, checkSaved, checkUpcoming, drawOptions } from "./check.js";
+import { saveTicket, upsertUser } from "../db/tickets.js";
+import { checkDraw, checkOverview, checkUpcoming, drawOptions } from "./check.js";
 import { decodeChoice } from "./choice.js";
 import {
   ASK_NUMBERS,
@@ -19,10 +20,10 @@ import {
   ERROR,
   invalidTicket,
   notDrawnYet,
+  overviewMessages,
   PHOTO_UNSUPPORTED,
   pickDraw,
   resultMessage,
-  savedMessage,
   savedNote,
   STALE_BUTTON,
   WELCOME,
@@ -67,11 +68,13 @@ export function createBot(
     await next();
   });
 
-  // Saved tickets, each against its own draw. No saved tickets: ask for some.
+  // The latest and upcoming draw of each game, with the tickets saved for
+  // them. Shown even with no tickets saved: the draws are worth seeing.
+  // Three messages, sent in order: each waits for the one before.
   const retire = async (ctx: Context & { from: { id: number } }) => {
-    const saved = await savedTickets(ctx.from.id);
-    if (saved.length === 0) return html(ctx, ASK_NUMBERS);
-    return rich(ctx, savedMessage(await checkSaved(saved, now())));
+    for (const text of overviewMessages(await checkOverview(ctx.from.id, now()))) {
+      await rich(ctx, text);
+    }
   };
 
   dm.command("start", (ctx) => html(ctx, WELCOME));

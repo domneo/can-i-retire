@@ -14,7 +14,7 @@ import {
   type Outcome,
   type TotoOutcome,
 } from "./evaluate.js";
-import type { DrawOptions, SavedDraw } from "./check.js";
+import type { DrawOptions, LatestDraw, Overview, PendingDraw } from "./check.js";
 import { encodeChoice } from "./choice.js";
 import { canonical, FORMAT_RULE, type Ticket } from "./ticket.js";
 
@@ -65,7 +65,7 @@ export function drawKeyboard(ticket: Ticket, options: DrawOptions): InlineKeyboa
 
 export const notDrawnYet = (ticket: Ticket, date: string): string =>
   [
-    para("<b>You cannot retire yet.</b>"),
+    verdict(false),
     pendingTable(ticket.game, date, "draw has not happened yet", [ticket]),
   ].join("\n");
 
@@ -203,22 +203,24 @@ function ticketTable(checked: CheckedWithDraw[]): string {
 
 /**
  * Tickets for a draw with no stored results: the status is the caption.
- * `date` is null when only a draw number is known.
+ * `date` is null when only a draw number is known; `status` is null when the
+ * context already says it.
  */
 const pendingTable = (
   game: Game,
   date: string | null,
-  status: string,
+  status: string | null,
   tickets: Ticket[],
 ): string =>
   table(
-    [`<b>${GAME_NAME[game]}</b>`, ...(date ? [displayDate(date)] : []), status].join(" · "),
+    [`<b>${GAME_NAME[game]}</b>`, ...(date ? [displayDate(date)] : []), ...(status ? [status] : [])]
+      .join(" · "),
     ["Ticket"],
-    tickets.map((t) => [ticketCode(t)]),
+    tickets.length > 0 ? tickets.map((t) => [ticketCode(t)]) : [["No tickets saved"]],
   );
 
 const verdict = (won: boolean): string =>
-  para(won ? "🎉 <b>You can retire!!!</b>" : "<b>You cannot retire yet.</b>");
+  para(won ? "🎉 <b>You can retire!!!</b>" : "😔 <b>You cannot retire yet.</b>");
 
 /**
  * The verdict, then the draw and the ticket's result under it.
@@ -240,28 +242,39 @@ export function resultMessage(checked: Checked): string {
   ].join("\n");
 }
 
-// --- saved tickets ---------------------------------------------------------
+// --- /retire ---------------------------------------------------------------
 
-function savedDrawBlock(d: SavedDraw): string {
-  const tickets = d.checked.map((c) => c.ticket);
-  const first = d.checked[0]!;
-  if (first.draw) {
-    return [drawTable(first.draw, tickets), ticketTable(d.checked.filter(hasDraw))].join("\n");
-  }
-  const status = d.notDrawn ? "draw has not happened yet" : "results not published yet";
-  return pendingTable(d.game, d.date, status, tickets);
-}
+/** Under "Upcoming draws", a draw still to come needs no status. */
+const pendingBlock = (d: PendingDraw): string =>
+  pendingTable(d.game, d.date, d.notDrawn ? null : "results not published yet", d.tickets);
+
+/** The draw always; its ticket table only when tickets were saved for it. */
+const latestBlock = ({ draw, checked }: LatestDraw): string =>
+  [
+    drawTable(draw, checked.map((c) => c.ticket)),
+    ...(checked.length > 0 ? [ticketTable(checked)] : []),
+  ].join("\n");
 
 /**
- * The /retire answer: one verdict over every saved ticket, then each draw
- * with its tickets under it. Any win is a win; a draw without stored results
- * is never counted as a loss.
+ * The /retire answer, as three messages: the verdict with the newest stored
+ * draw of each game and its tickets, then the draws to come with theirs, then
+ * what to send next. Only the latest draws decide the verdict; a draw without
+ * stored results is never counted as a loss.
  */
-export function savedMessage(draws: SavedDraw[]): string {
-  const won = draws.some((d) => d.checked.some((c) => hasDraw(c) && isWin(c.outcome)));
+export function overviewMessages({ pending, latest }: Overview): [string, string, string] {
+  const won = latest.some((d) => d.checked.some((c) => isWin(c.outcome)));
+  const empty = [...pending.map((d) => d.tickets), ...latest.map((d) => d.checked)].every(
+    (t) => t.length === 0,
+  );
   return [
-    verdict(won),
-    draws.map(savedDrawBlock).join("\n<hr/>\n"),
-    para("Send numbers to add another ticket."),
-  ].join("\n");
+    [
+      verdict(won),
+      ...latest.map(latestBlock),
+    ].join("\n"),
+    [para("📅 <b>Upcoming draws</b>"), ...pending.map(pendingBlock)].join("\n"),
+    (empty
+      ? [para("Send your numbers to check them."), ...FORMAT_RULE.split("\n").map(para)]
+      : [para("Send numbers to add another ticket.")]
+    ).join("\n"),
+  ];
 }
