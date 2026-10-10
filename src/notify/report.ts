@@ -28,6 +28,10 @@ function duration(seconds: number | null): string {
  * run passes what it wrote, a backfill passes nothing rather than three
  * hundred tables.
  *
+ * A successful scheduled run is just its draws: it arrives on a timetable, so
+ * the header and counts say nothing the draw does not. A failure keeps them,
+ * because the header is what makes it read as an alert.
+ *
  * One block per line, so ./telegram.js can cut an over-long message at a
  * newline without leaving a tag open.
  */
@@ -43,12 +47,19 @@ export function formatRun(run: RunRow, draws: string[] = []): string {
     ...(failures.length > 0 ? [["Failures", String(failures.length)] as [string, string]] : []),
   ];
 
+  const summary =
+    ok && run.kind === "scheduled"
+      ? []
+      : [
+          `<p>${ok ? "✅" : "🚨"} <b>${GAME_LABEL[run.game]} ${escapeHtml(run.kind)}` +
+            ` — ${ok ? "ok" : "FAILED"}</b></p>`,
+          `<table bordered compact>${counts
+            .map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`)
+            .join("")}</table>`,
+        ];
+
   const lines = [
-    `<p>${ok ? "✅" : "🚨"} <b>${GAME_LABEL[run.game]} ${escapeHtml(run.kind)}` +
-      ` — ${ok ? "ok" : "FAILED"}</b></p>`,
-    `<table bordered compact>${counts
-      .map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`)
-      .join("")}</table>`,
+    ...summary,
     ...draws,
     ...failures
       .slice(0, MAX_FAILURE_LINES)

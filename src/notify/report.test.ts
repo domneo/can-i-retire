@@ -29,6 +29,25 @@ test("a successful run reports counts and the draw", () => {
   );
 });
 
+test("a successful scheduled run is just the draw", () => {
+  assert.equal(
+    formatRun({ ...OK, kind: "scheduled" }, ["<table bordered compact>…draw…</table>"]),
+    "<table bordered compact>…draw…</table>",
+  );
+});
+
+test("a failed scheduled run keeps the header and counts", () => {
+  const text = formatRun({
+    ...OK,
+    kind: "scheduled",
+    status: "error",
+    draws_written: 0,
+    error: "toto 4218: page served no results block",
+  });
+  assert.match(text, /^<p>🚨 <b>TOTO scheduled — FAILED<\/b><\/p>$/m);
+  assert.match(text, /<th>Draws written<\/th><td>0<\/td>/);
+});
+
 test("a failed run reports the error and the draw it failed on", () => {
   const text = formatRun({
     ...OK,

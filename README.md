@@ -93,7 +93,9 @@ TOTO 4218 · Thu 17 Sep 2026 · 17 19 23 35 36 39 (+49) · Group 1 $1,248,856 ·
 The failure message is the point of the feature. A parser broken by a site
 redesign writes no draws, and no draws is exactly what a quiet week looks like;
 only an explicit alert tells the two apart. A backfill reports the same way, but
-counts only — hundreds of draw lines is not a notification.
+counts only — hundreds of draw lines is not a notification. A successful
+scheduled run drops the header and counts and posts only the draw; a failed one
+keeps them.
 
 The message is built from the run's `scrape_runs` row, so the chat and the
 database cannot disagree. A send that fails is logged and swallowed: a
