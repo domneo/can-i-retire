@@ -144,7 +144,7 @@ const writeFourdOn = (drawNo: number, drawDate: string) =>
     meta,
   );
 
-/** A pending-draw table, as /retire and the upcoming button show it. */
+/** A pending-draw table, as /upcoming and the upcoming button show it. */
 const pending = (caption: string, ...tickets: string[]): string[] => [
   `<table bordered striped compact><caption>${caption}</caption>`,
   '<tr><th align="center">Ticket</th></tr>',
@@ -162,29 +162,37 @@ const fourdDrawTable = (drawNo: number, date: string): string[] => [
   "</table>",
 ];
 
-test("/retire with nothing saved shows the upcoming draws and asks for numbers", async () => {
+test("/retire with nothing saved shows only the verdict", async () => {
   for (const text of ["/retire", "Can I retire?", "can i retire"]) {
     const replies = await say(text);
     assert.equal(replies.every((r) => r.rich), true, text);
     assert.deepEqual(
       replies.map((r) => r.text),
-      [
-        // No draws stored yet, so no latest results.
-        "<p>😔 <b>You cannot retire yet.</b></p>",
-        [
-          "<p>📅 <b>Upcoming draws</b></p>",
-          ...pending("<b>TOTO</b> · Mon 5 Oct 2026"),
-          ...pending("<b>4D</b> · Sun 4 Oct 2026"),
-        ].join("\n"),
-        [
-          "<p>Send your numbers to check them.</p>",
-          "<p>4D: four digits, e.g. 0427.</p>",
-          "<p>TOTO: 6 to 12 different numbers from 1 to 49, e.g. 2 14 16 21 36 47.</p>",
-        ].join("\n"),
-      ],
+      // No draws stored yet, so no latest results.
+      ["<p>😔 <b>You cannot retire yet.</b></p>"],
       text,
     );
   }
+});
+
+test("/upcoming with nothing saved shows the upcoming draws and asks for numbers", async () => {
+  const replies = await say("/upcoming");
+  assert.equal(replies.every((r) => r.rich), true);
+  assert.deepEqual(
+    replies.map((r) => r.text),
+    [
+      [
+        "<p>📅 <b>Upcoming draws</b></p>",
+        ...pending("<b>TOTO</b> · Mon 5 Oct 2026"),
+        ...pending("<b>4D</b> · Sun 4 Oct 2026"),
+      ].join("\n"),
+      [
+        "<p>Send your numbers to check them.</p>",
+        "<p>4D: four digits, e.g. 0427.</p>",
+        "<p>TOTO: 6 to 12 different numbers from 1 to 49, e.g. 2 14 16 21 36 47.</p>",
+      ].join("\n"),
+    ],
+  );
 });
 
 test("with no draws stored, only the upcoming draw is offered", async () => {
@@ -262,7 +270,7 @@ test("the upcoming draw has not happened yet", async () => {
       ].join("\n"),
       [
         "<p>😔 <b>You cannot retire yet.</b></p>",
-        "<p>Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.</p>",
+        "<p>Ticket saved. Send /upcoming to see your tickets for the draws to come.</p>",
       ].join("\n"),
     ],
   );
@@ -313,6 +321,11 @@ test("a past date without results is never called a loss or 'not happened'", asy
   assert.doesNotMatch(reply!.text, /no prize|not happened/);
 });
 
+test("a ticket saved without stored results points to /upcoming", async () => {
+  const [, note] = await press("u:2026-09-17:2 14 16 21 36 47");
+  assert.match(note!.text, /Send \/upcoming to see your tickets/);
+});
+
 const totoDrawTable = [
   "<table bordered compact><caption><b>TOTO Draw #4217</b> · Mon 14 Sep 2026</caption>",
   "<tr><th>Winning</th><td><code>2 14 16 21 36 47</code></td></tr>",
@@ -320,7 +333,7 @@ const totoDrawTable = [
   "</table>",
 ];
 
-test("/retire shows the upcoming and latest draws with the tickets saved for them", async () => {
+test("/retire shows the latest draws and /upcoming the draws to come, with their tickets", async () => {
   const userId = 7;
   await press("u:2026-10-04:0427", userId);
   await press("u:2026-10-04:1234", userId);
@@ -337,6 +350,12 @@ test("/retire shows the upcoming and latest draws with the tickets saved for the
       totoDrawTable.join("\n"),
       fourdDrawTable(5535, "Sat 3 Oct 2026").join("\n"),
       "<p>😔 <b>You cannot retire yet.</b></p>",
+    ],
+  );
+  const upcomingBefore = await say("/upcoming", userId);
+  assert.deepEqual(
+    upcomingBefore.map((r) => r.text),
+    [
       [
         "<p>📅 <b>Upcoming draws</b></p>",
         ...pending("<b>TOTO</b> · Thu 17 Sep 2026 · results not published yet", "2 14 16 21 36 47"),
@@ -364,6 +383,12 @@ test("/retire shows the upcoming and latest draws with the tickets saved for the
         "</table>",
       ].join("\n"),
       "<p>🎉 <b>You can retire!!!</b></p>",
+    ],
+  );
+  const upcomingAfter = await say("/upcoming", userId);
+  assert.deepEqual(
+    upcomingAfter.map((r) => r.text),
+    [
       [
         "<p>📅 <b>Upcoming draws</b></p>",
         ...pending("<b>TOTO</b> · Thu 17 Sep 2026 · results not published yet", "2 14 16 21 36 47"),
@@ -384,7 +409,9 @@ test("/retire shows the upcoming and latest draws with the tickets saved for the
 });
 
 test("saved tickets are private to the user who saved them", async () => {
-  const reply = (await say("/retire", 8)).map((r) => r.text).join("\n");
+  const reply = [...(await say("/retire", 8)), ...(await say("/upcoming", 8))]
+    .map((r) => r.text)
+    .join("\n");
   assert.doesNotMatch(reply, /Your tickets|<td align="center"><code>/);
   assert.match(reply, /Send your numbers to check them\./);
 });

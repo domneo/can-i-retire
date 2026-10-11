@@ -143,7 +143,8 @@ The Telegram bot answers in private chats; group messages are ignored.
 | ------------------------------ | ---------------------------------------------------- |
 | `0427`                         | 4D: asks which draw to check against                 |
 | `2 14 16 21 36 47` (6–12 nums) | TOTO, System entries too: asks which draw            |
-| `/retire` or "Can I retire?"   | Upcoming and latest draws, with your saved tickets   |
+| `/retire` or "Can I retire?"   | Latest draws, with your saved tickets                |
+| `/upcoming`                    | Upcoming draws, with your saved tickets              |
 | Anything else                  | The number format rule                               |
 
 The question comes with one button per draw: the upcoming draw, then the last
@@ -162,24 +163,19 @@ Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.
 
 The upcoming draw is the next regular draw day (TOTO Mon and Thu, 4D Wed, Sat
 and Sun) that has no stored results. Pressing it says the draw has not happened
-yet. An old upcoming button whose draw has since been stored checks that draw;
-one whose date has passed without stored results says results are not
-published yet. The bot never reports a loss without results to back it.
+yet, and the ticket is saved for `/upcoming`. An old upcoming button whose
+draw has since been stored checks that draw; one whose date has passed without
+stored results says results are not published yet. The bot never reports a loss without results to back it.
 
 Pressing a draw also saves the ticket for that draw date, and removes the
 draw buttons. A ticket saved for a draw older than the newest stored one is
 kept but not shown by `/retire`.
-`/retire` or "Can I retire?" then answers in up to five messages:
+`/retire` or "Can I retire?" then answers in up to three messages:
 
 1. **TOTO:** the newest stored draw, with the tickets saved for it checked
    against it.
 2. **4D:** the same for 4D. A game with no stored draw has no message.
 3. **The verdict**, from those two draws only.
-4. **Upcoming draws:** the next draw of each game, with the tickets saved for
-   it. A draw after the latest stored one whose results never arrived shows
-   here too, as "results not published yet", so a saved ticket is never
-   dropped silently.
-5. **What to send next.**
 
 ```
 TOTO Draw #4217 · Mon 14 Sep 2026 · Winning 2 14 16 21 36 47 · Additional 1
@@ -191,6 +187,14 @@ Your tickets · prize per $1 bet: 0427 — Starter — $250 Big, Small pays noth
 ```
 🎉 You can retire!!!
 ```
+
+`/upcoming` answers in two messages:
+
+1. **Upcoming draws:** the next draw of each game, with the tickets saved for
+   it. A draw after the latest stored one whose results never arrived shows
+   here too, as "results not published yet", so a saved ticket is never
+   dropped silently.
+2. **What to send next.**
 
 ```
 📅 <b>Upcoming draws</b>
@@ -205,8 +209,8 @@ Send numbers to add another ticket.
 ```
 
 Tickets saved for draws older than the latest stored one are not shown, and
-only the latest draws decide the verdict. With nothing saved, the same
-messages are sent, and the last one gives the number format rule.
+only the latest draws decide the verdict. With nothing saved, both commands
+still answer, and the last `/upcoming` message gives the number format rule.
 
 A saved ticket is bound by date, not draw number: the draw has no number until
 its results are scraped, so each check looks the draw up by game and date.
