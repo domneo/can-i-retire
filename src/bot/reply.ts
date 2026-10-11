@@ -63,11 +63,11 @@ export function drawKeyboard(ticket: Ticket, options: DrawOptions): InlineKeyboa
   return keyboard;
 }
 
-export const notDrawnYet = (ticket: Ticket, date: string): string =>
-  [
-    verdict(false),
-    pendingTable(ticket.game, date, "draw has not happened yet", [ticket]),
-  ].join("\n");
+/** The draw message and the verdict for an upcoming draw with no results yet. */
+export const notDrawnYet = (ticket: Ticket, date: string): [string, string] => [
+  pendingTable(ticket.game, date, "draw has not happened yet", [ticket]),
+  verdict(false),
+];
 
 /**
  * Added under the reply to a press: the ticket is now saved. `listed` is false
@@ -187,7 +187,7 @@ const hasDraw = (c: Checked): c is CheckedWithDraw => c.draw !== null;
 function ticketTable(checked: CheckedWithDraw[]): string {
   if (checked[0]!.ticket.game === "toto") {
     return table(
-      "Your tickets",
+      "<b>Your tickets</b>",
       ["Ticket", "Matched", "Prize"],
       checked.map(({ ticket, outcome }) => {
         const o = outcome as TotoOutcome;
@@ -198,7 +198,7 @@ function ticketTable(checked: CheckedWithDraw[]): string {
   }
   // Big or Small is not asked for, so a win quotes both payouts.
   return table(
-    "Your tickets · prize per $1 bet",
+    "<b>Your tickets</b> · prize per $1 bet",
     ["Ticket", "Prize", "Big", "Small"],
     checked.flatMap(({ ticket, outcome }) =>
       fourdRows(ticketCode(ticket), outcome as FourDOutcome),
@@ -228,23 +228,20 @@ const verdict = (won: boolean): string =>
   para(won ? "🎉 <b>You can retire!!!</b>" : "😔 <b>You cannot retire yet.</b>");
 
 /**
- * The verdict, then the draw and the ticket's result under it.
+ * Two messages: the draw with the ticket's result under it, as /retire shows
+ * a draw, then the verdict.
  *
  * A draw that is not stored says so: it is never counted as a loss. That is
  * the PRD's one hard rule.
  */
-export function resultMessage(checked: Checked): string {
+export function resultMessages(checked: Checked): [string, string] {
   if (!hasDraw(checked)) {
     return [
-      verdict(false),
       pendingTable(checked.ticket.game, null, "results not published yet", [checked.ticket]),
-    ].join("\n");
+      verdict(false),
+    ];
   }
-  return [
-    verdict(isWin(checked.outcome)),
-    drawTable(checked.draw, [checked.ticket]),
-    ticketTable([checked]),
-  ].join("\n");
+  return [latestBlock({ draw: checked.draw, checked: [checked] }), verdict(isWin(checked.outcome))];
 }
 
 // --- /retire ---------------------------------------------------------------
@@ -261,21 +258,19 @@ const latestBlock = ({ draw, checked }: LatestDraw): string =>
   ].join("\n");
 
 /**
- * The /retire answer, as three messages: the verdict with the newest stored
- * draw of each game and its tickets, then the draws to come with theirs, then
- * what to send next. Only the latest draws decide the verdict; a draw without
- * stored results is never counted as a loss.
+ * The /retire answer: the newest stored draw of each game with its tickets,
+ * one message per game, then the verdict, then the draws to come with theirs,
+ * then what to send next. Only the latest draws decide the verdict; a draw
+ * without stored results is never counted as a loss.
  */
-export function overviewMessages({ pending, latest }: Overview): [string, string, string] {
+export function overviewMessages({ pending, latest }: Overview): string[] {
   const won = latest.some((d) => d.checked.some((c) => isWin(c.outcome)));
   const empty = [...pending.map((d) => d.tickets), ...latest.map((d) => d.checked)].every(
     (t) => t.length === 0,
   );
   return [
-    [
-      verdict(won),
-      ...latest.map(latestBlock),
-    ].join("\n"),
+    ...latest.map(latestBlock),
+    verdict(won),
     [para("📅 <b>Upcoming draws</b>"), ...pending.map(pendingBlock)].join("\n"),
     (empty
       ? [para("Send your numbers to check them."), ...FORMAT_RULE.split("\n").map(para)]

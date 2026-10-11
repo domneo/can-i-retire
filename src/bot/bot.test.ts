@@ -213,48 +213,61 @@ test("numbers are offered the upcoming draw and the last four, newest first", as
   ]);
 });
 
-test("a picked draw checks the numbers against that draw", async () => {
-  const [reply] = await press("d:5534:0427");
+test("a picked draw checks the numbers against that draw, then gives the verdict", async () => {
+  const [draw, verdict, ...rest] = await press("d:5534:0427");
   assert.equal(answered > 0, true);
-  assert.equal(reply!.rich, true);
+  assert.deepEqual(rest, []);
+  assert.equal(draw!.rich, true);
+  assert.equal(draw!.edited, true);
   assert.equal(
-    reply!.text,
+    draw!.text,
     [
-      "<p>🎉 <b>You can retire!!!</b></p>",
       "<table bordered compact><caption><b>4D Draw #5534</b> · Wed 30 Sep 2026</caption>",
       "<tr><th>1st</th><td><code>8608</code></td></tr>",
       "<tr><th>2nd</th><td><code>4918</code></td></tr>",
       "<tr><th>3rd</th><td><code>9832</code></td></tr>",
       "</table>",
-      "<table bordered striped compact><caption>Your tickets · prize per $1 bet</caption>",
+      "<table bordered striped compact><caption><b>Your tickets</b> · prize per $1 bet</caption>",
       '<tr><th align="center">Ticket</th><th align="center">Prize</th><th align="center">Big</th><th align="center">Small</th></tr>',
       '<tr><td align="center"><code>0427</code></td><td align="center"><b>Starter</b></td><td align="center">$250</td><td align="center">nothing</td></tr>',
       "</table>",
+    ].join("\n"),
+  );
+  assert.equal(verdict!.rich, true);
+  assert.equal(verdict!.edited, false);
+  assert.equal(
+    verdict!.text,
+    [
+      "<p>🎉 <b>You can retire!!!</b></p>",
       // Older than the newest stored 4D draw (5535), so /retire will not list it.
       "<p>Ticket saved. /retire shows only the latest draw, so it will not list this one.</p>",
     ].join("\n"),
   );
 
-  const [loss] = await press("d:5534:1234");
+  const [lossDraw, loss] = await press("d:5534:1234");
+  assert.match(lossDraw!.text, /<td align="center"><code>1234<\/code><\/td><td align="center">No prize<\/td>/);
   assert.match(loss!.text, /^<p>😔 <b>You cannot retire yet\.<\/b><\/p>/);
-  assert.match(loss!.text, /<td align="center"><code>1234<\/code><\/td><td align="center">No prize<\/td>/);
 });
 
 test("the upcoming draw has not happened yet", async () => {
-  const [reply] = await press("u:2026-10-04:0427");
-  assert.equal(
-    reply!.text,
+  const replies = await press("u:2026-10-04:0427");
+  assert.deepEqual(
+    replies.map((r) => r.text),
     [
-      "<p>😔 <b>You cannot retire yet.</b></p>",
-      "<table bordered striped compact><caption><b>4D</b> · Sun 4 Oct 2026 · draw has not happened yet</caption>",
-      '<tr><th align="center">Ticket</th></tr>',
-      '<tr><td align="center"><code>0427</code></td></tr>',
-      "</table>",
-      "<p>Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.</p>",
-    ].join("\n"),
+      [
+        "<table bordered striped compact><caption><b>4D</b> · Sun 4 Oct 2026 · draw has not happened yet</caption>",
+        '<tr><th align="center">Ticket</th></tr>',
+        '<tr><td align="center"><code>0427</code></td></tr>',
+        "</table>",
+      ].join("\n"),
+      [
+        "<p>😔 <b>You cannot retire yet.</b></p>",
+        "<p>Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.</p>",
+      ].join("\n"),
+    ],
   );
 
-  const [again] = await press("u:2026-10-04:0427");
+  const [, again] = await press("u:2026-10-04:0427");
   assert.match(again!.text, /This ticket is already saved\./);
 });
 
@@ -272,21 +285,25 @@ test("an old upcoming button checks the draw once it is stored", async () => {
     },
     meta,
   );
-  const [reply] = await press("u:2026-09-14:2 14 16 21 36 47");
-  assert.equal(
-    reply!.text,
+  const replies = await press("u:2026-09-14:2 14 16 21 36 47");
+  assert.deepEqual(
+    replies.map((r) => r.text),
     [
-      "<p>🎉 <b>You can retire!!!</b></p>",
-      "<table bordered compact><caption><b>TOTO Draw #4217</b> · Mon 14 Sep 2026</caption>",
-      "<tr><th>Winning</th><td><code><b>2</b> <b>14</b> <b>16</b> <b>21</b> <b>36</b> <b>47</b></code></td></tr>",
-      "<tr><th>Additional</th><td><code>1</code></td></tr>",
-      "</table>",
-      "<table bordered striped compact><caption>Your tickets</caption>",
-      '<tr><th align="center">Ticket</th><th align="center">Matched</th><th align="center">Prize</th></tr>',
-      '<tr><td align="center"><code>2 14 16 21 36 47</code></td><td align="center">6</td><td align="center"><b>Group 1 $1,553,027</b></td></tr>',
-      "</table>",
-      "<p>Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.</p>",
-    ].join("\n"),
+      [
+        "<table bordered compact><caption><b>TOTO Draw #4217</b> · Mon 14 Sep 2026</caption>",
+        "<tr><th>Winning</th><td><code><b>2</b> <b>14</b> <b>16</b> <b>21</b> <b>36</b> <b>47</b></code></td></tr>",
+        "<tr><th>Additional</th><td><code>1</code></td></tr>",
+        "</table>",
+        "<table bordered striped compact><caption><b>Your tickets</b></caption>",
+        '<tr><th align="center">Ticket</th><th align="center">Matched</th><th align="center">Prize</th></tr>',
+        '<tr><td align="center"><code>2 14 16 21 36 47</code></td><td align="center">6</td><td align="center"><b>Group 1 $1,553,027</b></td></tr>',
+        "</table>",
+      ].join("\n"),
+      [
+        "<p>🎉 <b>You can retire!!!</b></p>",
+        "<p>Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.</p>",
+      ].join("\n"),
+    ],
   );
 });
 
@@ -317,11 +334,9 @@ test("/retire shows the upcoming and latest draws with the tickets saved for the
   assert.deepEqual(
     before.map((r) => r.text),
     [
-      [
-        "<p>😔 <b>You cannot retire yet.</b></p>",
-        ...totoDrawTable,
-        ...fourdDrawTable(5535, "Sat 3 Oct 2026"),
-      ].join("\n"),
+      totoDrawTable.join("\n"),
+      fourdDrawTable(5535, "Sat 3 Oct 2026").join("\n"),
+      "<p>😔 <b>You cannot retire yet.</b></p>",
       [
         "<p>📅 <b>Upcoming draws</b></p>",
         ...pending("<b>TOTO</b> · Thu 17 Sep 2026 · results not published yet", "2 14 16 21 36 47"),
@@ -339,16 +354,16 @@ test("/retire shows the upcoming and latest draws with the tickets saved for the
   assert.deepEqual(
     after.map((r) => r.text),
     [
+      totoDrawTable.join("\n"),
       [
-        "<p>🎉 <b>You can retire!!!</b></p>",
-        ...totoDrawTable,
         ...fourdDrawTable(5536, "Sun 4 Oct 2026"),
-        "<table bordered striped compact><caption>Your tickets · prize per $1 bet</caption>",
+        "<table bordered striped compact><caption><b>Your tickets</b> · prize per $1 bet</caption>",
         '<tr><th align="center">Ticket</th><th align="center">Prize</th><th align="center">Big</th><th align="center">Small</th></tr>',
         '<tr><td align="center"><code>0427</code></td><td align="center"><b>Starter</b></td><td align="center">$250</td><td align="center">nothing</td></tr>',
         '<tr><td align="center"><code>1234</code></td><td align="center">No prize</td><td align="center">–</td><td align="center">–</td></tr>',
         "</table>",
       ].join("\n"),
+      "<p>🎉 <b>You can retire!!!</b></p>",
       [
         "<p>📅 <b>Upcoming draws</b></p>",
         ...pending("<b>TOTO</b> · Thu 17 Sep 2026 · results not published yet", "2 14 16 21 36 47"),
@@ -363,7 +378,7 @@ test("/retire shows the upcoming and latest draws with the tickets saved for the
   // they are not shown and do not count.
   await writeFourdOn(5537, "2026-10-07");
   const later = (await say("/retire", userId)).map((r) => r.text).join("\n");
-  assert.match(later, /^<p>😔 <b>You cannot retire yet\.<\/b><\/p>/);
+  assert.match(later, /^<p>😔 <b>You cannot retire yet\.<\/b><\/p>$/m);
   assert.match(later, /<b>4D Draw #5537<\/b>/);
   assert.doesNotMatch(later, /5536|0427|1234/);
 });
@@ -389,23 +404,28 @@ test("a button this bot did not write asks for the numbers again", async () => {
   assert.deepEqual(reply!.buttons, []);
 });
 
-test("a press answers in place and removes the draw choices", async () => {
+test("a press answers in place, removes the draw choices, and sends the verdict below", async () => {
   const replies = await press("d:5534:0427");
-  assert.equal(replies.length, 1);
-  assert.equal(replies[0]!.edited, true);
-  assert.deepEqual(replies[0]!.buttons, []);
+  assert.deepEqual(
+    replies.map((r) => [r.edited, r.buttons]),
+    [
+      [true, []],
+      [false, []],
+    ],
+  );
 });
 
 test("a pick of the latest stored draw is saved and listed by /retire", async () => {
   const userId = 9;
-  const [reply] = await press("d:5537:4321", userId);
+  const [, reply] = await press("d:5537:4321", userId);
   assert.match(reply!.text, /Ticket saved\. Send \/retire/);
-  const [again] = await press("d:5537:4321", userId);
+  const [, again] = await press("d:5537:4321", userId);
   assert.match(again!.text, /This ticket is already saved\./);
 
-  const [latest] = await say("/retire", userId);
-  assert.match(latest!.text, /<b>4D Draw #5537<\/b>/);
-  assert.match(latest!.text, /<code>4321<\/code><\/td><td align="center">No prize/);
+  // TOTO first, then 4D.
+  const [, fourd] = await say("/retire", userId);
+  assert.match(fourd!.text, /<b>4D Draw #5537<\/b>/);
+  assert.match(fourd!.text, /<code>4321<\/code><\/td><td align="center">No prize/);
 });
 
 test("the same button twice leaves the answer as it is", async () => {
@@ -415,10 +435,11 @@ test("the same button twice leaves the answer as it is", async () => {
 
 test("a message that cannot be edited gets the answer below it", async () => {
   editFails = "Bad Request: message to edit not found";
-  const [reply] = await press("d:5534:0427");
-  assert.equal(reply!.edited, false);
-  assert.equal(reply!.rich, true);
-  assert.match(reply!.text, /You can retire!!!/);
+  const [draw, verdict] = await press("d:5534:0427");
+  assert.equal(draw!.edited, false);
+  assert.equal(draw!.rich, true);
+  assert.match(draw!.text, /<b>4D Draw #5534<\/b>/);
+  assert.match(verdict!.text, /You can retire!!!/);
 });
 
 test("a drawn 4D number is bold in the draw table", async () => {

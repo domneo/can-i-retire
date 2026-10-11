@@ -148,13 +148,16 @@ The Telegram bot answers in private chats; group messages are ignored.
 
 The question comes with one button per draw: the upcoming draw, then the last
 four stored draws of that game, newest first. Pressing one checks the numbers
-against that draw:
+against that draw. The answer is two messages: the draw with a **Your
+tickets** table under it, laid out as `/retire` shows a draw, then the verdict:
 
 ```
-🎉 <b>You can retire!!!</b>
+TOTO Draw #4217 · Mon 14 Sep 2026
+Winning 2 14 16 21 36 47 · Additional 1
+Your tickets: 2 14 16 21 36 47 — 6 matched — Group 1 $1,553,027
 
-<b>TOTO 4217</b> · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)
-• 2 14 16 21 36 47 — Group 1 $1,553,027
+🎉 You can retire!!!
+Ticket saved. Send /retire or “Can I retire?” to check your saved tickets.
 ```
 
 The upcoming draw is the next regular draw day (TOTO Mon and Thu, 4D Wed, Sat
@@ -166,22 +169,27 @@ published yet. The bot never reports a loss without results to back it.
 Pressing a draw also saves the ticket for that draw date, and removes the
 draw buttons. A ticket saved for a draw older than the newest stored one is
 kept but not shown by `/retire`.
-`/retire` or "Can I retire?" then answers in three messages, TOTO before 4D
-in each:
+`/retire` or "Can I retire?" then answers in up to five messages:
 
-1. **The verdict**, then the newest stored draw of each game, with the
-   tickets saved for it checked against it.
-2. **Upcoming draws:** the next draw of each game, with the tickets saved for
+1. **TOTO:** the newest stored draw, with the tickets saved for it checked
+   against it.
+2. **4D:** the same for 4D. A game with no stored draw has no message.
+3. **The verdict**, from those two draws only.
+4. **Upcoming draws:** the next draw of each game, with the tickets saved for
    it. A draw after the latest stored one whose results never arrived shows
    here too, as "results not published yet", so a saved ticket is never
    dropped silently.
-3. **What to send next.**
+5. **What to send next.**
 
 ```
-🎉 <b>You can retire!!!</b>
-<b>TOTO 4217</b> · Mon 14 Sep 2026 · 2 14 16 21 36 47 (+1)
-<b>4D 5536</b> · Sun 4 Oct 2026 · 1st 8608 · 2nd 4918 · 3rd 9832
-• 0427 — Starter prize: $250 Big, Small pays nothing, per $1
+TOTO Draw #4217 · Mon 14 Sep 2026 · Winning 2 14 16 21 36 47 · Additional 1
+```
+```
+4D Draw #5536 · Sun 4 Oct 2026 · 1st 8608 · 2nd 4918 · 3rd 9832
+Your tickets · prize per $1 bet: 0427 — Starter — $250 Big, Small pays nothing
+```
+```
+🎉 You can retire!!!
 ```
 
 ```

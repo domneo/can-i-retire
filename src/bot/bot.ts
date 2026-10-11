@@ -22,7 +22,7 @@ import {
   overviewMessages,
   PHOTO_UNSUPPORTED,
   pickDraw,
-  resultMessage,
+  resultMessages,
   savedNote,
   STALE_BUTTON,
   WELCOME,
@@ -69,7 +69,7 @@ export function createBot(
 
   // The latest and upcoming draw of each game, with the tickets saved for
   // them. Shown even with no tickets saved: the draws are worth seeing.
-  // Three messages, sent in order: each waits for the one before.
+  // Several messages, sent in order: each waits for the one before.
   const retire = async (ctx: Context & { from: { id: number } }) => {
     for (const text of overviewMessages(await checkOverview(ctx.from.id, now()))) {
       await rich(ctx, text);
@@ -95,13 +95,17 @@ export function createBot(
     });
   });
 
-  // The answer replaces the message the button is on, and its keyboard goes:
-  // the numbers are checked and saved, so the draw choice is done.
+  // The draw and the ticket's result replace the message the button is on,
+  // and its keyboard goes: the numbers are checked and saved, so the draw
+  // choice is done. The verdict follows as a message of its own.
   dm.on("callback_query:data", async (ctx) => {
     await ctx.answerCallbackQuery();
 
-    /** `result` is rich HTML, anything else plain HTML. */
-    const show = async (text: string, { result = true } = {}) => {
+    /**
+     * `result` is rich HTML, anything else plain HTML. False when the answer
+     * was already on screen.
+     */
+    const show = async (text: string, { result = true } = {}): Promise<boolean> => {
       try {
         await (result
           ? ctx.editMessageText({ html: text })
@@ -109,10 +113,16 @@ export function createBot(
       } catch (err) {
         if (!(err instanceof GrammyError)) throw err;
         // A second press before the first edit landed: the answer is on screen.
-        if (err.description.includes("message is not modified")) return;
+        if (err.description.includes("message is not modified")) return false;
         // Too old or gone: answer below it instead.
         await (result ? rich(ctx, text) : html(ctx, text));
       }
+      return true;
+    };
+
+    /** The draw message in place, then the verdict and `note` under it. */
+    const answer = async ([draw, verdict]: [string, string], note?: string) => {
+      if (await show(draw)) await rich(ctx, note ? `${verdict}\n${note}` : verdict);
     };
 
     const choice = decodeChoice(ctx.callbackQuery.data);
@@ -120,18 +130,19 @@ export function createBot(
     if (choice.kind === "draw") {
       const checked = await checkDraw(choice.ticket, choice.drawNo);
       // Not stored, so there is no date to save the ticket under.
-      if (!checked.draw) return show(resultMessage(checked));
+      if (!checked.draw) return answer(resultMessages(checked));
       const isNew = await saveTicket(ctx.from.id, choice.ticket, checked.draw.drawDate);
       const listed = await isLatestDraw(checked.draw.game, checked.draw.drawNo);
-      return show(`${resultMessage(checked)}\n${savedNote(isNew, listed)}`);
+      return answer(resultMessages(checked), savedNote(isNew, listed));
     }
     // Saved whatever the check finds: a draw whose results are not out yet
     // is exactly what a later /retire is for.
     const isNew = await saveTicket(ctx.from.id, choice.ticket, choice.date);
     const checked = await checkUpcoming(choice.ticket, choice.date, now());
-    const reply =
-      checked === "not drawn" ? notDrawnYet(choice.ticket, choice.date) : resultMessage(checked);
-    return show(`${reply}\n${savedNote(isNew)}`);
+    return answer(
+      checked === "not drawn" ? notDrawnYet(choice.ticket, choice.date) : resultMessages(checked),
+      savedNote(isNew),
+    );
   });
 
   return bot;
