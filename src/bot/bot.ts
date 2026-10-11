@@ -3,16 +3,15 @@
 //
 // A check is two steps. Numbers in, and the bot offers the upcoming draw and
 // the last few stored ones as buttons. A button press checks the numbers
-// against that one draw. Picking the upcoming draw also saves the ticket, and
-// /retire shows the upcoming and latest draw of each game with the tickets
-// saved for them.
+// against that one draw and saves the ticket for it. /retire shows the
+// upcoming and latest draw of each game with the tickets saved for them.
 //
 // Private chats only (PRD: group chats are out of scope for v1). Anything
 // from a group is ignored rather than answered.
 
 import { Bot, GrammyError, type BotConfig, type Context } from "grammy";
 import { saveTicket, upsertUser } from "../db/tickets.js";
-import { checkDraw, checkOverview, checkUpcoming, drawOptions } from "./check.js";
+import { checkDraw, checkOverview, checkUpcoming, drawOptions, isLatestDraw } from "./check.js";
 import { decodeChoice } from "./choice.js";
 import {
   ASK_NUMBERS,
@@ -96,27 +95,20 @@ export function createBot(
     });
   });
 
-  // The answer replaces the message the button is on, and the keyboard stays,
-  // so another draw can be picked for the same numbers without typing them
-  // again — and the chat does not fill up with one reply per press.
+  // The answer replaces the message the button is on, and its keyboard goes:
+  // the numbers are checked and saved, so the draw choice is done.
   dm.on("callback_query:data", async (ctx) => {
     await ctx.answerCallbackQuery();
 
-    /**
-     * `result` is rich HTML, anything else plain HTML. `keep: false` drops the
-     * keyboard: a stale one would only fail again.
-     */
-    const show = async (text: string, { result = true, keep = true } = {}) => {
-      const message = ctx.callbackQuery.message;
-      const keyboard =
-        keep && message && "reply_markup" in message ? message.reply_markup : undefined;
+    /** `result` is rich HTML, anything else plain HTML. */
+    const show = async (text: string, { result = true } = {}) => {
       try {
         await (result
-          ? ctx.editMessageText({ html: text }, { reply_markup: keyboard })
-          : ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: keyboard }));
+          ? ctx.editMessageText({ html: text })
+          : ctx.editMessageText(text, { parse_mode: "HTML" }));
       } catch (err) {
         if (!(err instanceof GrammyError)) throw err;
-        // The same button twice: the answer is already on screen.
+        // A second press before the first edit landed: the answer is on screen.
         if (err.description.includes("message is not modified")) return;
         // Too old or gone: answer below it instead.
         await (result ? rich(ctx, text) : html(ctx, text));
@@ -124,9 +116,14 @@ export function createBot(
     };
 
     const choice = decodeChoice(ctx.callbackQuery.data);
-    if (!choice) return show(STALE_BUTTON, { result: false, keep: false });
+    if (!choice) return show(STALE_BUTTON, { result: false });
     if (choice.kind === "draw") {
-      return show(resultMessage(await checkDraw(choice.ticket, choice.drawNo)));
+      const checked = await checkDraw(choice.ticket, choice.drawNo);
+      // Not stored, so there is no date to save the ticket under.
+      if (!checked.draw) return show(resultMessage(checked));
+      const isNew = await saveTicket(ctx.from.id, choice.ticket, checked.draw.drawDate);
+      const listed = await isLatestDraw(checked.draw.game, checked.draw.drawNo);
+      return show(`${resultMessage(checked)}\n${savedNote(isNew, listed)}`);
     }
     // Saved whatever the check finds: a draw whose results are not out yet
     // is exactly what a later /retire is for.

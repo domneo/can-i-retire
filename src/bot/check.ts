@@ -64,6 +64,15 @@ export async function checkDraw(ticket: Ticket, drawNo: number): Promise<Checked
 }
 
 /**
+ * Whether `drawNo` is the newest stored draw of its game: the only stored draw
+ * whose saved tickets /retire shows.
+ */
+export async function isLatestDraw(game: Game, drawNo: number): Promise<boolean> {
+  const [latest] = await recentDraws(game, 1);
+  return latest?.drawNo === drawNo;
+}
+
+/**
  * A press on an "upcoming" button. The button may be days old: once that
  * draw is stored it is checked like any other, and once its date has passed
  * without results it is "not published yet", never "not happened".

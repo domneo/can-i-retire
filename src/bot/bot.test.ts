@@ -230,6 +230,8 @@ test("a picked draw checks the numbers against that draw", async () => {
       '<tr><th align="center">Ticket</th><th align="center">Prize</th><th align="center">Big</th><th align="center">Small</th></tr>',
       '<tr><td align="center"><code>0427</code></td><td align="center"><b>Starter</b></td><td align="center">$250</td><td align="center">nothing</td></tr>',
       "</table>",
+      // Older than the newest stored 4D draw (5535), so /retire will not list it.
+      "<p>Ticket saved. /retire shows only the latest draw, so it will not list this one.</p>",
     ].join("\n"),
   );
 
@@ -308,7 +310,7 @@ test("/retire shows the upcoming and latest draws with the tickets saved for the
   await press("u:2026-10-05:2 14 16 21 36 47", userId);
   // After the newest stored TOTO draw, but its results never arrived.
   await press("u:2026-09-17:2 14 16 21 36 47", userId);
-  // A past draw is not saved: only an upcoming pick is.
+  // Saved for a past draw older than the latest: not shown.
   await press("d:5534:0427", userId);
 
   const before = await say("/retire", userId);
@@ -387,11 +389,23 @@ test("a button this bot did not write asks for the numbers again", async () => {
   assert.deepEqual(reply!.buttons, []);
 });
 
-test("a press answers in place and keeps the keyboard for another pick", async () => {
+test("a press answers in place and removes the draw choices", async () => {
   const replies = await press("d:5534:0427");
   assert.equal(replies.length, 1);
   assert.equal(replies[0]!.edited, true);
-  assert.deepEqual(replies[0]!.buttons, ["Sun 4 Oct 2026 · upcoming → u:2026-10-04:0427"]);
+  assert.deepEqual(replies[0]!.buttons, []);
+});
+
+test("a pick of the latest stored draw is saved and listed by /retire", async () => {
+  const userId = 9;
+  const [reply] = await press("d:5537:4321", userId);
+  assert.match(reply!.text, /Ticket saved\. Send \/retire/);
+  const [again] = await press("d:5537:4321", userId);
+  assert.match(again!.text, /This ticket is already saved\./);
+
+  const [latest] = await say("/retire", userId);
+  assert.match(latest!.text, /<b>4D Draw #5537<\/b>/);
+  assert.match(latest!.text, /<code>4321<\/code><\/td><td align="center">No prize/);
 });
 
 test("the same button twice leaves the answer as it is", async () => {

@@ -163,7 +163,9 @@ yet. An old upcoming button whose draw has since been stored checks that draw;
 one whose date has passed without stored results says results are not
 published yet. The bot never reports a loss without results to back it.
 
-Pressing the upcoming draw also saves the ticket for that draw date.
+Pressing a draw also saves the ticket for that draw date, and removes the
+draw buttons. A ticket saved for a draw older than the newest stored one is
+kept but not shown by `/retire`.
 `/retire` or "Can I retire?" then answers in three messages, TOTO before 4D
 in each:
 

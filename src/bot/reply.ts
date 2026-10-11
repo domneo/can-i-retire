@@ -69,11 +69,16 @@ export const notDrawnYet = (ticket: Ticket, date: string): string =>
     pendingTable(ticket.game, date, "draw has not happened yet", [ticket]),
   ].join("\n");
 
-/** Added under any reply to an "upcoming" press: the ticket is now saved. */
-export const savedNote = (isNew: boolean): string =>
+/**
+ * Added under the reply to a press: the ticket is now saved. `listed` is false
+ * for a draw older than the newest stored one, which /retire does not show.
+ */
+export const savedNote = (isNew: boolean, listed = true): string =>
   para(
     (isNew ? "Ticket saved." : "This ticket is already saved.") +
-      " Send /retire or “Can I retire?” to check your saved tickets.",
+      (listed
+        ? " Send /retire or “Can I retire?” to check your saved tickets."
+        : " /retire shows only the latest draw, so it will not list this one."),
   );
 
 /** A button this bot did not write, or one from before a format change. */
