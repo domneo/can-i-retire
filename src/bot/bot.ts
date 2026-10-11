@@ -4,7 +4,8 @@
 // A check is two steps. Numbers in, and the bot offers the upcoming draw and
 // the last few stored ones as buttons. A button press checks the numbers
 // against that one draw and saves the ticket for it. /retire shows the
-// upcoming and latest draw of each game with the tickets saved for them.
+// latest draw of each game with the tickets saved for it; /upcoming shows the
+// draws to come with theirs.
 //
 // Private chats only (PRD: group chats are out of scope for v1). Anything
 // from a group is ignored rather than answered.
@@ -19,12 +20,13 @@ import {
   ERROR,
   invalidTicket,
   notDrawnYet,
-  overviewMessages,
   PHOTO_UNSUPPORTED,
   pickDraw,
   resultMessages,
+  retireMessages,
   savedNote,
   STALE_BUTTON,
+  upcomingMessages,
   WELCOME,
 } from "./reply.js";
 import { parseTicket } from "./ticket.js";
@@ -67,18 +69,22 @@ export function createBot(
     await next();
   });
 
-  // The latest and upcoming draw of each game, with the tickets saved for
-  // them. Shown even with no tickets saved: the draws are worth seeing.
-  // Several messages, sent in order: each waits for the one before.
-  const retire = async (ctx: Context & { from: { id: number } }) => {
-    for (const text of overviewMessages(await checkOverview(ctx.from.id, now()))) {
-      await rich(ctx, text);
-    }
-  };
+  // Shown even with no tickets saved: the draws are worth seeing. Several
+  // messages, sent in order: each waits for the one before.
+  const overview =
+    (messages: typeof retireMessages) => async (ctx: Context & { from: { id: number } }) => {
+      for (const text of messages(await checkOverview(ctx.from.id, now()))) {
+        await rich(ctx, text);
+      }
+    };
+  // The latest draw of each game, with the tickets saved for it.
+  const retire = overview(retireMessages);
 
   dm.command("start", (ctx) => html(ctx, WELCOME));
   dm.command("retire", retire);
   dm.hears(CAN_I_RETIRE, retire);
+  // The draws to come, with the tickets saved for them.
+  dm.command("upcoming", overview(upcomingMessages));
 
   dm.on("message:photo", (ctx) => html(ctx, PHOTO_UNSUPPORTED));
 
@@ -133,16 +139,16 @@ export function createBot(
       if (!checked.draw) return answer(resultMessages(checked));
       const isNew = await saveTicket(ctx.from.id, choice.ticket, checked.draw.drawDate);
       const listed = await isLatestDraw(checked.draw.game, checked.draw.drawNo);
-      return answer(resultMessages(checked), savedNote(isNew, listed));
+      return answer(resultMessages(checked), savedNote(isNew, listed ? "retire" : null));
     }
     // Saved whatever the check finds: a draw whose results are not out yet
-    // is exactly what a later /retire is for.
+    // is exactly what a later /upcoming is for.
     const isNew = await saveTicket(ctx.from.id, choice.ticket, choice.date);
     const checked = await checkUpcoming(choice.ticket, choice.date, now());
-    return answer(
-      checked === "not drawn" ? notDrawnYet(choice.ticket, choice.date) : resultMessages(checked),
-      savedNote(isNew),
-    );
+    if (checked === "not drawn") {
+      return answer(notDrawnYet(choice.ticket, choice.date), savedNote(isNew, "upcoming"));
+    }
+    return answer(resultMessages(checked), savedNote(isNew, checked.draw ? "retire" : "upcoming"));
   });
 
   return bot;

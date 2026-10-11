@@ -70,15 +70,22 @@ export const notDrawnYet = (ticket: Ticket, date: string): [string, string] => [
 ];
 
 /**
- * Added under the reply to a press: the ticket is now saved. `listed` is false
- * for a draw older than the newest stored one, which /retire does not show.
+ * Added under the reply to a press: the ticket is now saved. `listedBy` names
+ * the command that shows it: /retire for the newest stored draw, /upcoming for
+ * a draw with no stored results, null for a draw older than the newest stored
+ * one, which neither shows.
  */
-export const savedNote = (isNew: boolean, listed = true): string =>
+export const savedNote = (
+  isNew: boolean,
+  listedBy: "retire" | "upcoming" | null = "retire",
+): string =>
   para(
     (isNew ? "Ticket saved." : "This ticket is already saved.") +
-      (listed
+      (listedBy === "retire"
         ? " Send /retire or “Can I retire?” to check your saved tickets."
-        : " /retire shows only the latest draw, so it will not list this one."),
+        : listedBy === "upcoming"
+          ? " Send /upcoming to see your tickets for the draws to come."
+          : " /retire shows only the latest draw, so it will not list this one."),
   );
 
 /** A button this bot did not write, or one from before a format change. */
@@ -244,7 +251,7 @@ export function resultMessages(checked: Checked): [string, string] {
   return [latestBlock({ draw: checked.draw, checked: [checked] }), verdict(isWin(checked.outcome))];
 }
 
-// --- /retire ---------------------------------------------------------------
+// --- /retire and /upcoming -------------------------------------------------
 
 /** Under "Upcoming draws", a draw still to come needs no status. */
 const pendingBlock = (d: PendingDraw): string =>
@@ -259,18 +266,23 @@ const latestBlock = ({ draw, checked }: LatestDraw): string =>
 
 /**
  * The /retire answer: the newest stored draw of each game with its tickets,
- * one message per game, then the verdict, then the draws to come with theirs,
- * then what to send next. Only the latest draws decide the verdict; a draw
- * without stored results is never counted as a loss.
+ * one message per game, then the verdict. Only the latest draws decide the
+ * verdict; a draw without stored results is never counted as a loss.
  */
-export function overviewMessages({ pending, latest }: Overview): string[] {
+export function retireMessages({ latest }: Overview): string[] {
   const won = latest.some((d) => d.checked.some((c) => isWin(c.outcome)));
+  return [...latest.map(latestBlock), verdict(won)];
+}
+
+/**
+ * The /upcoming answer: the draws to come with their tickets, then what to
+ * send next.
+ */
+export function upcomingMessages({ pending, latest }: Overview): string[] {
   const empty = [...pending.map((d) => d.tickets), ...latest.map((d) => d.checked)].every(
     (t) => t.length === 0,
   );
   return [
-    ...latest.map(latestBlock),
-    verdict(won),
     [para("📅 <b>Upcoming draws</b>"), ...pending.map(pendingBlock)].join("\n"),
     (empty
       ? [para("Send your numbers to check them."), ...FORMAT_RULE.split("\n").map(para)]
